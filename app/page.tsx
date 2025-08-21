@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Users, Trophy, Plus, Loader2 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Trash2, Users, Trophy, Plus, Loader2, Star } from "lucide-react"
 import { useIsMobile } from "@/components/ui/use-mobile"
 
 interface Player {
@@ -21,6 +22,17 @@ interface Team {
   name: string
   players: Player[]
   averageSkill: number
+}
+
+interface PredefinedPlayer {
+  id: string
+  name: string
+  defaultPositions: {
+    futsal: string[]
+    society: string[]
+    campo: string[]
+  }
+  defaultSkill: number
 }
 
 const positionsByGameType = {
@@ -46,6 +58,33 @@ const gameTypes = {
   campo: { name: "Campo", playersPerTeam: 11 },
 }
 
+  // Lista pré-definida de jogadores (em ordem alfabética)
+  const predefinedPlayers: PredefinedPlayer[] = [
+    { id: "4", name: "Alex", defaultPositions: { futsal: ["Fixo", "Ala Direito"], society: ["Zagueiro", "Meio-campo"], campo: ["Zagueiro", "Volante"] }, defaultSkill: 5 },
+    { id: "18", name: "Anderson", defaultPositions: { futsal: ["Goleiro", "Fixo"], society: ["Goleiro", "Zagueiro"], campo: ["Goleiro", "Zagueiro"] }, defaultSkill: 5 },
+    { id: "22", name: "André", defaultPositions: { futsal: ["Fixo", "Goleiro"], society: ["Zagueiro", "Goleiro"], campo: ["Zagueiro", "Goleiro"] }, defaultSkill: 5 },
+    { id: "12", name: "Daniel", defaultPositions: { futsal: ["Ala Direito", "Pivô"], society: ["Lateral Direito", "Atacante"], campo: ["Lateral Direito", "Ponta Direita"] }, defaultSkill: 5 },
+    { id: "1", name: "Davi", defaultPositions: { futsal: ["Fixo", "Ala Direito"], society: ["Meio-campo", "Atacante"], campo: ["Meio-campo", "Meia-atacante"] }, defaultSkill: 5 },
+    { id: "23", name: "Eduardo", defaultPositions: { futsal: ["Ala Esquerdo", "Fixo"], society: ["Lateral Esquerdo", "Zagueiro"], campo: ["Lateral Esquerdo", "Zagueiro"] }, defaultSkill: 5 },
+    { id: "20", name: "Felipe Augusto", defaultPositions: { futsal: ["Fixo", "Ala Esquerdo"], society: ["Meio-campo", "Zagueiro"], campo: ["Meio-campo", "Volante"] }, defaultSkill: 5 },
+    { id: "15", name: "Filipe", defaultPositions: { futsal: ["Fixo", "Goleiro"], society: ["Zagueiro", "Goleiro"], campo: ["Zagueiro", "Goleiro"] }, defaultSkill: 5 },
+    { id: "3", name: "Flavio", defaultPositions: { futsal: ["Ala Esquerdo", "Pivô"], society: ["Lateral Esquerdo", "Atacante"], campo: ["Lateral Esquerdo", "Ponta Esquerda"] }, defaultSkill: 5 },
+    { id: "14", name: "Gustavo", defaultPositions: { futsal: ["Pivô", "Ala Direito"], society: ["Atacante", "Meio-campo"], campo: ["Centroavante", "Meia-atacante"] }, defaultSkill: 5 },
+    { id: "11", name: "Igor", defaultPositions: { futsal: ["Goleiro", "Fixo"], society: ["Goleiro", "Zagueiro"], campo: ["Goleiro", "Zagueiro"] }, defaultSkill: 5 },
+    { id: "13", name: "Jefferson", defaultPositions: { futsal: ["Fixo", "Ala Esquerdo"], society: ["Meio-campo", "Zagueiro"], campo: ["Meio-campo", "Volante"] }, defaultSkill: 5 },
+    { id: "7", name: "Kell", defaultPositions: { futsal: ["Fixo", "Ala Esquerdo"], society: ["Meio-campo", "Atacante"], campo: ["Meio-campo", "Meia-atacante"] }, defaultSkill: 5 },
+    { id: "21", name: "Leopoldo", defaultPositions: { futsal: ["Pivô", "Ala Direito"], society: ["Atacante", "Meio-campo"], campo: ["Centroavante", "Meia-atacante"] }, defaultSkill: 5 },
+    { id: "9", name: "Léo", defaultPositions: { futsal: ["Fixo", "Goleiro"], society: ["Zagueiro", "Goleiro"], campo: ["Zagueiro", "Goleiro"] }, defaultSkill: 5 },
+    { id: "19", name: "Lopes", defaultPositions: { futsal: ["Ala Direito", "Pivô"], society: ["Lateral Direito", "Atacante"], campo: ["Lateral Direito", "Ponta Direita"] }, defaultSkill: 5 },
+    { id: "2", name: "Marcio", defaultPositions: { futsal: ["Goleiro", "Fixo"], society: ["Goleiro", "Zagueiro"], campo: ["Goleiro", "Zagueiro"] }, defaultSkill: 5 },
+    { id: "17", name: "Martins", defaultPositions: { futsal: ["Fixo", "Ala Direito"], society: ["Meio-campo", "Atacante"], campo: ["Meio-campo", "Meia-atacante"] }, defaultSkill: 5 },
+    { id: "6", name: "Paulo", defaultPositions: { futsal: ["Ala Direito", "Pivô"], society: ["Lateral Direito", "Atacante"], campo: ["Lateral Direito", "Ponta Direita"] }, defaultSkill: 5 },
+    { id: "8", name: "Pedro", defaultPositions: { futsal: ["Pivô", "Ala Direito"], society: ["Atacante", "Meio-campo"], campo: ["Centroavante", "Meia-atacante"] }, defaultSkill: 5 },
+    { id: "10", name: "Tião", defaultPositions: { futsal: ["Ala Esquerdo", "Fixo"], society: ["Lateral Esquerdo", "Zagueiro"], campo: ["Lateral Esquerdo", "Zagueiro"] }, defaultSkill: 5 },
+    { id: "5", name: "Vitor", defaultPositions: { futsal: ["Goleiro", "Fixo"], society: ["Goleiro", "Zagueiro"], campo: ["Goleiro", "Zagueiro"] }, defaultSkill: 5 },
+    { id: "16", name: "Wellington", defaultPositions: { futsal: ["Ala Esquerdo", "Fixo"], society: ["Lateral Esquerdo", "Zagueiro"], campo: ["Lateral Esquerdo", "Zagueiro"] }, defaultSkill: 5 },
+  ]
+
 export default function FootballTeams() {
   const [players, setPlayers] = useState<Player[]>([])
   const [teams, setTeams] = useState<Team[]>([])
@@ -56,6 +95,9 @@ export default function FootballTeams() {
     skill: 5,
   })
   const [isLoading, setIsLoading] = useState(false)
+  const [selectedPredefinedPlayers, setSelectedPredefinedPlayers] = useState<string[]>([])
+  const [editingPlayer, setEditingPlayer] = useState<{id: string, field: 'name' | 'skill'} | null>(null)
+  const [editedPlayers, setEditedPlayers] = useState<{[key: string]: {name: string, skill: number}}>({})
   const isMobile = useIsMobile()
 
   const addPlayer = () => {
@@ -80,6 +122,59 @@ export default function FootballTeams() {
     setPlayers([])
     setTeams([])
     setNewPlayer({ name: "", position: "", skill: 5 })
+    setSelectedPredefinedPlayers([])
+  }
+
+  const addPredefinedPlayers = () => {
+    if (!gameType || selectedPredefinedPlayers.length === 0) return
+
+    const newPlayers: Player[] = selectedPredefinedPlayers.map((playerId) => {
+      const predefinedPlayer = predefinedPlayers.find((p) => p.id === playerId)!
+      const availablePositions = predefinedPlayer.defaultPositions[gameType]
+      const randomPosition = availablePositions[Math.floor(Math.random() * availablePositions.length)]
+
+      // Usar dados editados se existirem, senão usar padrão
+      const editedData = editedPlayers[playerId] || {}
+      const finalName = editedData.name || predefinedPlayer.name
+      const finalSkill = editedData.skill || predefinedPlayer.defaultSkill
+
+      return {
+        id: `predefined_${playerId}`,
+        name: finalName,
+        position: randomPosition,
+        skill: finalSkill,
+      }
+    })
+
+    setPlayers([...players, ...newPlayers])
+    setSelectedPredefinedPlayers([])
+  }
+
+  const startEditing = (playerId: string, field: 'name' | 'skill') => {
+    setEditingPlayer({ id: playerId, field })
+  }
+
+  const saveEdit = (playerId: string, value: string | number) => {
+    setEditedPlayers(prev => ({
+      ...prev,
+      [playerId]: {
+        ...prev[playerId],
+        [editingPlayer!.field]: value
+      }
+    }))
+    setEditingPlayer(null)
+  }
+
+  const cancelEdit = () => {
+    setEditingPlayer(null)
+  }
+
+  const getEditedValue = (playerId: string, field: 'name' | 'skill', defaultValue: string | number) => {
+    const editedData = editedPlayers[playerId]
+    if (editedData && editedData[field] !== undefined) {
+      return editedData[field]
+    }
+    return defaultValue
   }
 
   const generateTeams = async () => {
@@ -181,75 +276,276 @@ export default function FootballTeams() {
         </Card>
 
         {gameType && (
-          <Card className="bg-gray-50/60 dark:bg-gray-900/60 backdrop-blur-md border-gray-200/30 dark:border-gray-700/30 shadow-xl">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-gray-800 dark:text-gray-100 text-lg sm:text-xl">
-                <Plus className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-500" />
-                Cadastrar Jogador - {gameTypes[gameType].name}
-              </CardTitle>
-              <CardDescription className="text-gray-600 dark:text-gray-300 text-sm sm:text-base">
-                Adicione jogadores com suas posições específicas para {gameTypes[gameType].name}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <div className="sm:col-span-2 lg:col-span-1">
-                  <Label htmlFor="name" className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
-                    Nome
-                  </Label>
-                  <Input
-                    id="name"
-                    value={newPlayer.name}
-                    onChange={(e) => setNewPlayer({ ...newPlayer, name: e.target.value })}
-                    placeholder="Nome do jogador"
-                    className="bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/40 dark:border-gray-600/40"
-                  />
+          <>
+            {/* Cadastro Manual de Jogador */}
+            <Card className="bg-gray-50/60 dark:bg-gray-900/60 backdrop-blur-md border-gray-200/30 dark:border-gray-700/30 shadow-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-gray-800 dark:text-gray-100 text-lg sm:text-xl">
+                  <Plus className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-500" />
+                  Cadastrar Novo Jogador - {gameTypes[gameType].name}
+                </CardTitle>
+                <CardDescription className="text-gray-600 dark:text-gray-300 text-sm sm:text-base">
+                  Adicione jogadores personalizados com suas posições específicas para {gameTypes[gameType].name}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                  <div className="sm:col-span-2 lg:col-span-1">
+                    <Label htmlFor="name" className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
+                      Nome
+                    </Label>
+                    <Input
+                      id="name"
+                      value={newPlayer.name}
+                      onChange={(e) => setNewPlayer({ ...newPlayer, name: e.target.value })}
+                      placeholder="Nome do jogador"
+                      className="bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/40 dark:border-gray-600/40"
+                    />
+                  </div>
+                  <div className="sm:col-span-2 lg:col-span-1">
+                    <Label htmlFor="position" className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
+                      Posição
+                    </Label>
+                    <Select
+                      value={newPlayer.position}
+                      onValueChange={(value) => setNewPlayer({ ...newPlayer, position: value })}
+                    >
+                      <SelectTrigger className="bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/40 dark:border-gray-600/40">
+                        <SelectValue placeholder="Selecione a posição" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-md">
+                        {positionsByGameType[gameType].map((pos) => (
+                          <SelectItem key={pos} value={pos}>
+                            {pos}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="skill" className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
+                      Habilidade (1-10)
+                    </Label>
+                    <Input
+                      id="skill"
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={newPlayer.skill}
+                      onChange={(e) => setNewPlayer({ ...newPlayer, skill: Number.parseInt(e.target.value) || 5 })}
+                      className="bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/40 dark:border-gray-600/40"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      onClick={addPlayer}
+                      className="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white shadow-lg active:from-emerald-600 active:to-blue-600 transition-all duration-200 text-sm sm:text-base"
+                    >
+                      {isMobile ? "Adicionar" : "Adicionar Jogador"}
+                    </Button>
+                  </div>
                 </div>
-                <div className="sm:col-span-2 lg:col-span-1">
-                  <Label htmlFor="position" className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
-                    Posição
-                  </Label>
-                  <Select
-                    value={newPlayer.position}
-                    onValueChange={(value) => setNewPlayer({ ...newPlayer, position: value })}
-                  >
-                    <SelectTrigger className="bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/40 dark:border-gray-600/40">
-                      <SelectValue placeholder="Selecione a posição" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-md">
-                      {positionsByGameType[gameType].map((pos) => (
-                        <SelectItem key={pos} value={pos}>
-                          {pos}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              </CardContent>
+            </Card>
+
+            {/* Lista de Jogadores Pré-definidos */}
+            <Card className="bg-gray-50/60 dark:bg-gray-900/60 backdrop-blur-md border-gray-200/30 dark:border-gray-700/30 shadow-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-gray-800 dark:text-gray-100 text-lg sm:text-xl">
+                  <Star className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-500" />
+                  Jogadores Disponíveis
+                </CardTitle>
+                <CardDescription className="text-gray-600 dark:text-gray-300 text-sm sm:text-base">
+                  Selecione os jogadores que vão participar. Clique no nome ou skill para editar.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {predefinedPlayers.map((player) => (
+                    <div
+                      key={player.id}
+                      className={`flex items-center space-x-2 p-3 rounded-lg border-2 transition-all duration-200 cursor-pointer ${
+                        selectedPredefinedPlayers.includes(player.id)
+                          ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/20"
+                          : "border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 hover:border-gray-300 dark:hover:border-gray-600"
+                      }`}
+                      onClick={() => {
+                        if (selectedPredefinedPlayers.includes(player.id)) {
+                          setSelectedPredefinedPlayers(selectedPredefinedPlayers.filter(id => id !== player.id))
+                        } else {
+                          setSelectedPredefinedPlayers([...selectedPredefinedPlayers, player.id])
+                        }
+                      }}
+                    >
+                      <Checkbox
+                        checked={selectedPredefinedPlayers.includes(player.id)}
+                        onChange={() => {}}
+                        className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                      />
+                      <div className="min-w-0 flex-1">
+                        {editingPlayer?.id === player.id && editingPlayer.field === 'name' ? (
+                          <Input
+                            value={getEditedValue(player.id, 'name', player.name)}
+                            onChange={(e) => setEditedPlayers(prev => ({
+                              ...prev,
+                              [player.id]: { ...prev[player.id], name: e.target.value }
+                            }))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                saveEdit(player.id, e.currentTarget.value)
+                              } else if (e.key === 'Escape') {
+                                cancelEdit()
+                              }
+                            }}
+                            onBlur={() => saveEdit(player.id, getEditedValue(player.id, 'name', player.name))}
+                            className="h-6 text-sm p-1"
+                            autoFocus
+                          />
+                        ) : (
+                          <p
+                            className="font-medium text-gray-800 dark:text-gray-100 text-sm truncate hover:bg-gray-100 dark:hover:bg-gray-700 px-1 py-0.5 rounded cursor-text"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              startEditing(player.id, 'name')
+                            }}
+                            title="Clique para editar o nome"
+                          >
+                            {getEditedValue(player.id, 'name', player.name)}
+                          </p>
+                        )}
+
+                        {editingPlayer?.id === player.id && editingPlayer.field === 'skill' ? (
+                          <Input
+                            type="number"
+                            min="1"
+                            max="10"
+                            value={getEditedValue(player.id, 'skill', player.defaultSkill)}
+                            onChange={(e) => setEditedPlayers(prev => ({
+                              ...prev,
+                              [player.id]: { ...prev[player.id], skill: Number(e.target.value) || 5 }
+                            }))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                saveEdit(player.id, Number(e.currentTarget.value) || 5)
+                              } else if (e.key === 'Escape') {
+                                cancelEdit()
+                              }
+                            }}
+                            onBlur={() => saveEdit(player.id, getEditedValue(player.id, 'skill', player.defaultSkill))}
+                            className="h-6 text-sm p-1 w-12"
+                            autoFocus
+                          />
+                        ) : (
+                          <p
+                            className="text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 px-1 py-0.5 rounded cursor-text"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              startEditing(player.id, 'skill')
+                            }}
+                            title="Clique para editar a skill"
+                          >
+                            Skill: {getEditedValue(player.id, 'skill', player.defaultSkill)}/10
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div>
-                  <Label htmlFor="skill" className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
-                    Habilidade (1-10)
-                  </Label>
-                  <Input
-                    id="skill"
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={newPlayer.skill}
-                    onChange={(e) => setNewPlayer({ ...newPlayer, skill: Number.parseInt(e.target.value) || 5 })}
-                    className="bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/40 dark:border-gray-600/40"
-                  />
-                </div>
-                <div className="flex items-end">
+
+                <div className="flex flex-col sm:flex-row gap-3">
                   <Button
-                    onClick={addPlayer}
-                    className="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white shadow-lg active:from-emerald-600 active:to-blue-600 transition-all duration-200 text-sm sm:text-base"
+                    onClick={addPredefinedPlayers}
+                    disabled={selectedPredefinedPlayers.length === 0}
+                    className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-lg active:from-yellow-600 active:to-orange-600 transition-all duration-200 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isMobile ? "Adicionar" : "Adicionar Jogador"}
+                    <Star className="h-4 w-4 mr-2" />
+                    Adicionar {selectedPredefinedPlayers.length} Jogador{selectedPredefinedPlayers.length !== 1 ? 'es' : ''}
                   </Button>
+
+                  {selectedPredefinedPlayers.length > 0 && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setSelectedPredefinedPlayers([])}
+                      className="text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600"
+                    >
+                      Limpar Seleção
+                    </Button>
+                  )}
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+
+            {/* Cadastro Manual de Jogador */}
+            <Card className="bg-gray-50/60 dark:bg-gray-900/60 backdrop-blur-md border-gray-200/30 dark:border-gray-700/30 shadow-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-gray-800 dark:text-gray-100 text-lg sm:text-xl">
+                  <Plus className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-500" />
+                  Cadastrar Novo Jogador - {gameTypes[gameType].name}
+                </CardTitle>
+                <CardDescription className="text-gray-600 dark:text-gray-300 text-sm sm:text-base">
+                  Adicione jogadores personalizados com suas posições específicas para {gameTypes[gameType].name}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                  <div className="sm:col-span-2 lg:col-span-1">
+                    <Label htmlFor="name" className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
+                      Nome
+                    </Label>
+                    <Input
+                      id="name"
+                      value={newPlayer.name}
+                      onChange={(e) => setNewPlayer({ ...newPlayer, name: e.target.value })}
+                      placeholder="Nome do jogador"
+                      className="bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/40 dark:border-gray-600/40"
+                    />
+                  </div>
+                  <div className="sm:col-span-2 lg:col-span-1">
+                    <Label htmlFor="position" className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
+                      Posição
+                    </Label>
+                    <Select
+                      value={newPlayer.position}
+                      onValueChange={(value) => setNewPlayer({ ...newPlayer, position: value })}
+                    >
+                      <SelectTrigger className="bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/40 dark:border-gray-600/40">
+                        <SelectValue placeholder="Selecione a posição" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-md">
+                        {positionsByGameType[gameType].map((pos) => (
+                          <SelectItem key={pos} value={pos}>
+                            {pos}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="skill" className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
+                      Habilidade (1-10)
+                    </Label>
+                    <Input
+                      id="skill"
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={newPlayer.skill}
+                      onChange={(e) => setNewPlayer({ ...newPlayer, skill: Number.parseInt(e.target.value) || 5 })}
+                      className="bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/40 dark:border-gray-600/40"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      onClick={addPlayer}
+                      className="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white shadow-lg active:from-emerald-600 active:to-blue-600 transition-all duration-200 text-sm sm:text-base"
+                    >
+                      {isMobile ? "Adicionar" : "Adicionar Jogador"}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </>
         )}
 
         {/* Lista de Jogadores */}
