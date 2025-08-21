@@ -91,7 +91,7 @@ O **Formador de Times** é uma aplicação web moderna e intuitiva que permite a
 
 ### **1. Clone o repositório**
 ```bash
-git clone https://github.com/SEU_USUARIO/football-teams.git
+git clone https://github.com/davi-montalvao/football-teams.git
 cd football-teams
 ```
 
@@ -282,7 +282,7 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 
 ## 👨‍💻 Autor
 
-**Davim** - [GitHub](https://github.com/SEU_USUARIO)
+**Davim** - [GitHub](https://github.com/davi-montalvao)
 
 ## 🙏 Agradecimentos
 
