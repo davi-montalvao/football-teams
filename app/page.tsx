@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useRef, useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -78,7 +78,7 @@ const getPositionBadgeClass = (position: string): string => {
 }
 
 // Mapeia nomes para papéis (ata, zag, le, etc.)
-const nameRoleOverrides: Record<string, 'ATA' | 'ZAG' | 'LE'> = {
+const nameRoleOverrides: Record<string, 'ATA' | 'ZAG' | 'LE' | 'LD'> = {
   'Boka': 'ATA',
   'Bruno P': 'ATA',
   'Lopes': 'ZAG',
@@ -90,10 +90,19 @@ const nameRoleOverrides: Record<string, 'ATA' | 'ZAG' | 'LE'> = {
   'Wedson': 'ZAG',
   'Peter': 'ATA',
   'Jota': 'ATA',
+  'Carlos': 'ZAG',
+  'Eduardo': 'ATA',
+  'Fabio Sanches': 'ZAG',
+  'Guimaraes': 'LE',
+  'Leopoldo': 'ZAG',
+  'Ley': 'ATA',
+  'Marcelinho': 'ATA',
+  'Mariano': 'LD',
+  'Anisio': 'ZAG',
 }
 
 // Converte o papel genérico para a posição por modalidade
-const mapRoleToPosition = (gameType: keyof typeof gameTypes | "", role: 'ATA' | 'ZAG' | 'LE'): string => {
+const mapRoleToPosition = (gameType: keyof typeof gameTypes | "", role: 'ATA' | 'ZAG' | 'LE' | 'LD'): string => {
   if (role === 'ATA') {
     if (gameType === 'futsal') return 'Pivô'
     if (gameType === 'society') return 'Ata'
@@ -108,6 +117,11 @@ const mapRoleToPosition = (gameType: keyof typeof gameTypes | "", role: 'ATA' | 
     if (gameType === 'futsal') return 'Ala E'
     if (gameType === 'society') return 'Lat E'
     if (gameType === 'campo') return 'Lat E'
+  }
+  if (role === 'LD') {
+    if (gameType === 'futsal') return 'Ala D'
+    if (gameType === 'society') return 'Lat D'
+    if (gameType === 'campo') return 'Lat D'
   }
   return getDefaultPositionForGameType(gameType)
 }
@@ -132,6 +146,7 @@ const getPredefinedBasePosition = (displayName: string, gameType: keyof typeof g
     "Cassio",
     "Davi",
     "Daniel",
+    "Anisio",
     "Diógenes",
     "Eduardo",
     "Fabio Sanches",
@@ -183,10 +198,40 @@ export default function FootballTeams() {
   const [editingPlayer, setEditingPlayer] = useState<{id: string, field: 'name'} | null>(null)
   const [editedPlayers, setEditedPlayers] = useState<{[key: string]: {name?: string, position?: string}}>({})
   const [editingPredefinedPositionId, setEditingPredefinedPositionId] = useState<string | null>(null)
-  const [editingRegisteredPositionId, setEditingRegisteredPositionId] = useState<string | null>(null)
+
   const isMobile = useIsMobile()
   const { toast } = useToast()
   const teamsSectionRef = useRef<HTMLDivElement | null>(null)
+
+  // Persistência em localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('ft_state')
+      if (saved) {
+        const data = JSON.parse(saved)
+        if (data.gameType) setGameType(data.gameType)
+        if (Array.isArray(data.predefined)) setPredefined(data.predefined)
+        if (data.selectedPredefinedPlayers) setSelectedPredefinedPlayers(data.selectedPredefinedPlayers)
+        if (data.editedPlayers) setEditedPlayers(data.editedPlayers)
+        if (Array.isArray(data.players)) setPlayers(data.players)
+        if (Array.isArray(data.teams)) setTeams(data.teams)
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    try {
+      const state = {
+        gameType,
+        predefined,
+        selectedPredefinedPlayers,
+        editedPlayers,
+        players,
+        teams,
+      }
+      localStorage.setItem('ft_state', JSON.stringify(state))
+    } catch {}
+  }, [gameType, predefined, selectedPredefinedPlayers, editedPlayers, players, teams])
 
   const addPlayer = () => {
     if (newPlayer.name && newPlayer.position && gameType) {
@@ -362,25 +407,39 @@ export default function FootballTeams() {
 
       Object.values(groups).forEach(arr => arr.sort(() => Math.random() - 0.5))
 
-    const team1: Player[] = []
-    const team2: Player[] = []
+      const team1: Player[] = []
+      const team2: Player[] = []
+
+      // Grupos de separação: evitar que fiquem no mesmo time
+      const separationGroups: string[][] = [
+        ['Lucas','Lukinhas','JP','Cassio'],
+        ['Anisio','Mariano'],
+      ]
+      const nameInTeam = (t: Player[], name: string) => t.some(p => stripGloveEmoji(p.name).toLowerCase() === stripGloveEmoji(name).toLowerCase())
+      const violatesGroup = (t: Player[], candidateName: string) => {
+        return separationGroups.some(group => group.includes(stripGloveEmoji(candidateName)) && group.some(member => nameInTeam(t, member)))
+      }
 
       const addToTeams = (player: Player) => {
-        // Se ambos têm espaço, envia para o menor
+        const name = stripGloveEmoji(player.name)
+        const t1ok = team1.length < playersPerTeam && !violatesGroup(team1, name)
+        const t2ok = team2.length < playersPerTeam && !violatesGroup(team2, name)
+        if (t1ok && t2ok) {
+          // escolhe o menor
+          if (team1.length <= team2.length) team1.push(player)
+          else team2.push(player)
+          return
+        }
+        if (t1ok) { team1.push(player); return }
+        if (t2ok) { team2.push(player); return }
+        // Se ambos violam, coloca no menor mesmo assim respeitando capacidade
         if (team1.length < playersPerTeam && team2.length < playersPerTeam) {
           if (team1.length <= team2.length) team1.push(player)
           else team2.push(player)
           return
         }
-        // Se só um tem espaço, envia para ele
-        if (team1.length < playersPerTeam) {
-        team1.push(player)
-          return
-        }
-        if (team2.length < playersPerTeam) {
-        team2.push(player)
-          return
-        }
+        if (team1.length < playersPerTeam) { team1.push(player); return }
+        if (team2.length < playersPerTeam) { team2.push(player); return }
         // Ambos cheios: ignora quaisquer extras
       }
 
@@ -616,7 +675,7 @@ export default function FootballTeams() {
                               className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full"
                               style={{ width: `${needed > 0 ? (current / needed) * 100 : 0}%` }}
                             />
-                          </div>F
+                          </div>
                         </>
                       )
                     })()}
@@ -810,6 +869,7 @@ export default function FootballTeams() {
                     <span className="truncate flex items-center gap-2">
                       <span className={`${index === 0 ? 'bg-yellow-400' : 'bg-blue-500'} inline-block w-3 h-3 rounded-full ring-2 ${index === 0 ? 'ring-yellow-200 dark:ring-yellow-700/50' : 'ring-blue-200 dark:ring-blue-700/50'}`}></span>
                       {team.name}
+                      <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">{team.players.length}/{gameTypes[gameType].playersPerTeam}</span>
                     </span>
 
                   </CardTitle>
