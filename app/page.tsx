@@ -68,6 +68,7 @@ const getDefaultPositionForGameType = (gameType: keyof typeof gameTypes | ""): s
     "Bruno P",
     "Boka",
     "Cassio",
+    "Davi",
     "Diógenes",
     "Eduardo",
     "Fabio Sanches",
@@ -307,11 +308,13 @@ export default function FootballTeams() {
                         }
                       }}
                     >
-                      <Checkbox
-                        checked={selectedPredefinedPlayers.includes(player.id)}
-                        onChange={() => {}}
-                        className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
-                      />
+                      <div className="hidden sm:block">
+                        <Checkbox
+                          checked={selectedPredefinedPlayers.includes(player.id)}
+                          onChange={() => {}}
+                          className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                        />
+                      </div>
                       <div className="min-w-0 flex-1">
                         {editingPlayer?.id === player.id && editingPlayer.field === 'name' ? (
                           <Input
@@ -332,26 +335,38 @@ export default function FootballTeams() {
                             autoFocus
                           />
                         ) : (
-                          <div className="flex items-center gap-2">
-                          <p
-                            className="font-medium text-gray-800 dark:text-gray-100 text-sm truncate hover:bg-gray-100 dark:hover:bg-gray-700 px-1 py-0.5 rounded cursor-text"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              startEditing(player.id, 'name')
-                            }}
-                            title="Clique para editar o nome"
-                          >
-                            {getEditedValue(player.id, 'name', player.name)}
-                          </p>
-                            {editingPredefinedPositionId === player.id ? (
+                          <div className="flex items-center justify-between gap-2 w-full">
+                            <p
+                              className="font-medium text-gray-800 dark:text-gray-100 text-sm overflow-hidden whitespace-nowrap hover:bg-gray-100 dark:hover:bg-gray-700 px-1 py-0.5 rounded cursor-text flex-1 min-w-0"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (isMobile) {
+                                  if (selectedPredefinedPlayers.includes(player.id)) {
+                                    setSelectedPredefinedPlayers(selectedPredefinedPlayers.filter(id => id !== player.id))
+                                  } else {
+                                    setSelectedPredefinedPlayers([...selectedPredefinedPlayers, player.id])
+                                  }
+                                } else {
+                                  startEditing(player.id, 'name')
+                                }
+                              }}
+                              title="Clique para editar o nome"
+                            >
+                              {getEditedValue(player.id, 'name', player.name)}
+                            </p>
+                            <div className="flex items-center gap-1">
+                              {editingPredefinedPositionId === player.id ? (
                               <Select
                                 value={editedPlayers[player.id]?.position || getDefaultPositionForGameType(gameType)}
-                                onValueChange={(value) => setEditedPlayers(prev => ({
-                              ...prev,
-                                  [player.id]: { ...prev[player.id], position: value }
-                                }))}
+                                onValueChange={(value) => {
+                                  setEditedPlayers(prev => ({
+                                    ...prev,
+                                    [player.id]: { ...prev[player.id], position: value }
+                                  }))
+                                  setEditingPredefinedPositionId(null)
+                                }}
                               >
-                                <SelectTrigger className="h-8 sm:h-6 w-[110px] sm:w-[130px] bg-gray-50/50 dark:bg-gray-800/50 border-gray-200/40 dark:border-gray-600/40 px-2 py-0">
+                                <SelectTrigger className="h-8 sm:h-6 w-[140px] sm:w-[130px] bg-gray-50/50 dark:bg-gray-800/50 border-gray-200/40 dark:border-gray-600/40 px-2 py-0">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent className="bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-md">
@@ -362,25 +377,27 @@ export default function FootballTeams() {
                                   ))}
                                 </SelectContent>
                               </Select>
-                            ) : (
+                              ) : (
                               <Badge
                                 variant="secondary"
-                                className="bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50 text-purple-700 dark:text-purple-300 text-[9px] sm:text-[10px] leading-none px-1 py-0 max-w-[44px] sm:max-w-[56px] truncate"
+                                className="inline-flex bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50 text-purple-700 dark:text-purple-300 text-[9px] sm:text-[10px] leading-none px-1 py-0 max-w-[44px] sm:max-w-[56px] truncate"
                               >
-                                {editedPlayers[player.id]?.position || getDefaultPositionForGameType(gameType)}
+                                <span className="sm:hidden">{(editedPlayers[player.id]?.position || getDefaultPositionForGameType(gameType)).slice(0,3)}</span>
+                                <span className="hidden sm:inline">{editedPlayers[player.id]?.position || getDefaultPositionForGameType(gameType)}</span>
                               </Badge>
-                            )}
-                            <button
-                              type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                                setEditingPredefinedPositionId(prev => prev === player.id ? null : player.id)
-                            }}
-                              className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-                              title="Editar posição"
-                          >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setEditingPredefinedPositionId(prev => prev === player.id ? null : player.id)
+                                }}
+                                className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+                                title="Editar posição"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -492,8 +509,8 @@ export default function FootballTeams() {
                       className="flex items-center justify-between p-3 bg-gray-100/50 dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200/30 dark:border-gray-600/30 rounded-lg active:bg-gray-200/60 dark:active:bg-gray-700/60 transition-all duration-200"
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                        <p className="font-medium text-gray-800 dark:text-gray-100 text-sm sm:text-base truncate">{player.name}</p>
+                        <div className="flex items-center justify-between gap-1.5 w-full">
+                        <p className="font-medium text-gray-800 dark:text-gray-100 text-sm sm:text-base overflow-hidden whitespace-nowrap flex-1 min-w-0">{player.name}</p>
                             {editingRegisteredPositionId === player.id ? (
                               <Select
                                 value={player.position}
@@ -518,7 +535,8 @@ export default function FootballTeams() {
                             variant="secondary"
                                 className="bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50 text-purple-700 dark:text-purple-300 text-[9px] sm:text-[10px] leading-none px-1 py-0 max-w-[44px] sm:max-w-[56px] truncate"
                           >
-                            {player.position}
+                            <span className="sm:hidden">{player.position.slice(0,3)}</span>
+                            <span className="hidden sm:inline">{player.position}</span>
                           </Badge>
                             )}
                             <button
@@ -527,7 +545,7 @@ export default function FootballTeams() {
                               className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
                               title="Editar posição"
                             >
-                              <Pencil className="h-3.5 w-3.5" />
+                              <Pencil className="h-4 w-4" />
                             </button>
                         </div>
                       </div>
@@ -652,14 +670,15 @@ export default function FootballTeams() {
                         className="flex items-center justify-between p-2 bg-gray-100/40 dark:bg-gray-800/40 backdrop-blur-sm rounded border border-gray-200/30 dark:border-gray-600/30"
                       >
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <p className="font-medium text-gray-800 dark:text-gray-100 text-sm sm:text-base truncate flex-1 min-w-0">{player.name}</p>
-                            <Badge
-                              variant="secondary"
+                          <div className="flex items-center justify-between gap-1.5 w-full">
+                            <p className="font-medium text-gray-800 dark:text-gray-100 text-sm sm:text-base overflow-hidden whitespace-nowrap flex-1 min-w-0">{player.name}</p>
+                        <Badge
+                          variant="secondary"
                               className="bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50 text-purple-700 dark:text-purple-300 text-[9px] sm:text-[10px] leading-none px-1 py-0 max-w-[44px] sm:max-w-[56px] truncate"
-                            >
-                              {player.position}
-                            </Badge>
+                        >
+                              <span className="sm:hidden">{player.position.slice(0,3)}</span>
+                              <span className="hidden sm:inline">{player.position}</span>
+                        </Badge>
                           </div>
                         </div>
                       </div>
