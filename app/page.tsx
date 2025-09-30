@@ -52,7 +52,7 @@ const positionsByGameType = {
 
 const gameTypes = {
   futsal: { name: "Futsal", playersPerTeam: 5 },
-  society: { name: "Society", playersPerTeam: 7 },
+  society: { name: "Society", playersPerTeam: 8 },
   campo: { name: "Campo", playersPerTeam: 11 },
 }
 
@@ -61,6 +61,66 @@ const getDefaultPositionForGameType = (gameType: keyof typeof gameTypes | ""): s
   if (gameType === "society") return "Meio"
   if (gameType === "campo") return "Meio"
   return "Meio-campo"
+}
+
+const getGoalkeeperPositionLabel = (gameType: keyof typeof gameTypes | ""): string => {
+  if (gameType === "society") return "Gol"
+  return "Goleiro"
+}
+
+const getPositionBadgeClass = (position: string): string => {
+  const pos = position.toLowerCase()
+  const isGol = pos.includes('gol') || pos.includes('goleiro')
+  const base = "text-[9px] sm:text-[10px] leading-none px-1 py-0 max-w-[44px] sm:max-w-[56px] truncate"
+  return isGol
+    ? `inline-flex bg-gradient-to-r from-blue-100 to-cyan-100 dark:from-blue-900/50 dark:to-cyan-900/50 text-blue-700 dark:text-blue-300 ${base}`
+    : `inline-flex bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50 text-purple-700 dark:text-purple-300 ${base}`
+}
+
+// Mapeia nomes para papéis (ata, zag, le, etc.)
+const nameRoleOverrides: Record<string, 'ATA' | 'ZAG' | 'LE'> = {
+  'Boka': 'ATA',
+  'Bruno P': 'ATA',
+  'Lopes': 'ZAG',
+  'Guiomar': 'ZAG',
+  'Jean': 'LE',
+  'Davi': 'LE',
+  'Lucas': 'ATA',
+  'Lukinhas': 'ATA',
+  'Wedson': 'ZAG',
+  'Peter': 'ATA',
+  'Jota': 'ATA',
+}
+
+// Converte o papel genérico para a posição por modalidade
+const mapRoleToPosition = (gameType: keyof typeof gameTypes | "", role: 'ATA' | 'ZAG' | 'LE'): string => {
+  if (role === 'ATA') {
+    if (gameType === 'futsal') return 'Pivô'
+    if (gameType === 'society') return 'Ata'
+    if (gameType === 'campo') return 'Centroavante'
+  }
+  if (role === 'ZAG') {
+    if (gameType === 'futsal') return 'Fixo'
+    if (gameType === 'society') return 'Zag'
+    if (gameType === 'campo') return 'Zagueiro'
+  }
+  if (role === 'LE') {
+    if (gameType === 'futsal') return 'Ala E'
+    if (gameType === 'society') return 'Lat E'
+    if (gameType === 'campo') return 'Lat E'
+  }
+  return getDefaultPositionForGameType(gameType)
+}
+
+const stripGloveEmoji = (name: string) => name.replace('🧤','').replace(' 🧤','').trim()
+
+const getPredefinedBasePosition = (displayName: string, gameType: keyof typeof gameTypes | ""): string => {
+  const nameNoEmoji = stripGloveEmoji(displayName)
+  const isGoalkeeper = displayName.includes('🧤') || nameNoEmoji.toLowerCase() === 'kleber' || nameNoEmoji.toLowerCase() === 'kebler'
+  if (isGoalkeeper) return getGoalkeeperPositionLabel(gameType)
+  const role = nameRoleOverrides[nameNoEmoji]
+  if (role) return mapRoleToPosition(gameType, role)
+  return getDefaultPositionForGameType(gameType)
 }
 
   // Lista pré-definida de jogadores (ordem alfabética)
@@ -80,6 +140,7 @@ const getDefaultPositionForGameType = (gameType: keyof typeof gameTypes | ""): s
     "Guimaraes",
     "JP",
     "Jean",
+    "Joaquim 🧤",
     "Jota",
     "Kebler 🧤",
     "Klebinho",
@@ -172,11 +233,15 @@ export default function FootballTeams() {
 
     const newPlayers: Player[] = selectedPredefinedPlayers.map((playerId) => {
       const predefinedPlayer = predefined.find((p) => p.id === playerId)!
-      const chosenPosition = editedPlayers[playerId]?.position || getDefaultPositionForGameType(gameType)
+      const editedPos = editedPlayers[playerId]?.position
+      const finalName = (editedPlayers[playerId]?.name || predefinedPlayer.name)
+      const isGoalkeeper = finalName.includes("🧤")
+      const overrideRole = nameRoleOverrides[finalName.replace(' 🧤','')] as ('ATA'|'ZAG'|'LE') | undefined
+      const overridePos = overrideRole ? mapRoleToPosition(gameType, overrideRole) : undefined
+      const chosenPosition = editedPos || (isGoalkeeper ? getGoalkeeperPositionLabel(gameType) : (overridePos || getDefaultPositionForGameType(gameType)))
 
       // Usar dados editados se existirem, senão usar padrão
       const editedData = editedPlayers[playerId] || {}
-      const finalName = editedData.name || predefinedPlayer.name
 
       return {
         id: `predefined_${playerId}`,
@@ -194,9 +259,13 @@ export default function FootballTeams() {
     if (!gameType || selectedPredefinedPlayers.length === 0) return []
     return selectedPredefinedPlayers.map((playerId) => {
       const predefinedPlayer = predefined.find((p) => p.id === playerId)!
-      const chosenPosition = editedPlayers[playerId]?.position || getDefaultPositionForGameType(gameType)
+      const editedPos = editedPlayers[playerId]?.position
       const editedData = editedPlayers[playerId] || {}
       const finalName = editedData.name || predefinedPlayer.name
+      const isGoalkeeper = finalName.includes("🧤")
+      const overrideRole = nameRoleOverrides[finalName.replace(' 🧤','')] as ('ATA'|'ZAG'|'LE') | undefined
+      const overridePos = overrideRole ? mapRoleToPosition(gameType, overrideRole) : undefined
+      const chosenPosition = editedPos || (isGoalkeeper ? getGoalkeeperPositionLabel(gameType) : (overridePos || getDefaultPositionForGameType(gameType)))
       return {
         id: `predefined_${playerId}`,
         name: finalName,
@@ -253,7 +322,7 @@ export default function FootballTeams() {
     toast({ title: "Formando Times...", description: "Estamos balanceando as posições." })
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500))
+    await new Promise(resolve => setTimeout(resolve, 1500))
 
       // Balanceamento por posição: goleiro, defesa, meio, ataque (ajustado por modalidade)
       const selected = [...pool].slice(0, totalPlayersNeeded)
@@ -293,25 +362,41 @@ export default function FootballTeams() {
 
       Object.values(groups).forEach(arr => arr.sort(() => Math.random() - 0.5))
 
-      const team1: Player[] = []
-      const team2: Player[] = []
+    const team1: Player[] = []
+    const team2: Player[] = []
 
-      const distribute = (arr: Player[]) => {
-        arr.forEach((player, idx) => {
-          if (idx % 2 === 0) team1.push(player)
+      const addToTeams = (player: Player) => {
+        // Se ambos têm espaço, envia para o menor
+        if (team1.length < playersPerTeam && team2.length < playersPerTeam) {
+          if (team1.length <= team2.length) team1.push(player)
           else team2.push(player)
-        })
+          return
+        }
+        // Se só um tem espaço, envia para ele
+        if (team1.length < playersPerTeam) {
+        team1.push(player)
+          return
+        }
+        if (team2.length < playersPerTeam) {
+        team2.push(player)
+          return
+        }
+        // Ambos cheios: ignora quaisquer extras
       }
 
-      // garante goleiros equilibrados primeiro
+      const distribute = (arr: Player[]) => {
+        arr.forEach((player) => addToTeams(player))
+      }
+
+      // garante goleiros equilibrados primeiro, depois demais posições
       distribute(groups.gol)
       distribute(groups.def)
       distribute(groups.meio)
       distribute(groups.ata)
 
       const built: Team[] = [
-        { name: "Time A", players: team1 },
-        { name: "Time B", players: team2 },
+        { name: "Time Amarelo", players: team1 },
+        { name: "Time Azul", players: team2 },
       ]
       setTeams(built)
       toast({ title: "Times gerados!", description: "Times balanceados por posição com sucesso." })
@@ -319,7 +404,7 @@ export default function FootballTeams() {
         teamsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       }, 50)
     } finally {
-      setIsLoading(false)
+    setIsLoading(false)
     }
   }
 
@@ -412,11 +497,11 @@ export default function FootballTeams() {
                       }}
                     >
                       <div className="hidden sm:block">
-                        <Checkbox
-                          checked={selectedPredefinedPlayers.includes(player.id)}
-                          onChange={() => {}}
-                          className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
-                        />
+                      <Checkbox
+                        checked={selectedPredefinedPlayers.includes(player.id)}
+                        onChange={() => {}}
+                        className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                      />
                       </div>
                       <div className="min-w-0 flex-1">
                         {editingPlayer?.id === player.id && editingPlayer.field === 'name' ? (
@@ -439,10 +524,10 @@ export default function FootballTeams() {
                           />
                         ) : (
                           <div className="flex items-center justify-between gap-2 w-full">
-                            <p
+                          <p
                               className="font-medium text-gray-800 dark:text-gray-100 text-sm overflow-hidden whitespace-nowrap hover:bg-gray-100 dark:hover:bg-gray-700 px-1 py-0.5 rounded cursor-text flex-1 min-w-0"
-                              onClick={(e) => {
-                                e.stopPropagation()
+                            onClick={(e) => {
+                              e.stopPropagation()
                                 if (isMobile) {
                                   const needed = gameType ? (gameTypes[gameType].playersPerTeam * 2) : 0
                                   const missing = Math.max(0, needed - (players.length + selectedPredefinedPlayers.length))
@@ -459,20 +544,20 @@ export default function FootballTeams() {
                                     setSelectedPredefinedPlayers([...selectedPredefinedPlayers, player.id])
                                   }
                                 } else {
-                                  startEditing(player.id, 'name')
+                              startEditing(player.id, 'name')
                                 }
-                              }}
-                              title="Clique para editar o nome"
-                            >
-                              {getEditedValue(player.id, 'name', player.name)}
-                            </p>
+                            }}
+                            title="Clique para editar o nome"
+                          >
+                            {getEditedValue(player.id, 'name', player.name)}
+                          </p>
                             <div className="flex items-center gap-1">
                               {editingPredefinedPositionId === player.id ? (
                               <Select
-                                value={editedPlayers[player.id]?.position || getDefaultPositionForGameType(gameType)}
+                                value={editedPlayers[player.id]?.position || getPredefinedBasePosition(getEditedValue(player.id, 'name', player.name), gameType)}
                                 onValueChange={(value) => {
                                   setEditedPlayers(prev => ({
-                                    ...prev,
+                              ...prev,
                                     [player.id]: { ...prev[player.id], position: value }
                                   }))
                                   setEditingPredefinedPositionId(null)
@@ -492,16 +577,16 @@ export default function FootballTeams() {
                               ) : (
                               <Badge
                                 variant="secondary"
-                                className="inline-flex bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50 text-purple-700 dark:text-purple-300 text-[9px] sm:text-[10px] leading-none px-1 py-0 max-w-[44px] sm:max-w-[56px] truncate"
+                                className={getPositionBadgeClass(editedPlayers[player.id]?.position || getPredefinedBasePosition(getEditedValue(player.id, 'name', player.name), gameType))}
                               >
-                                <span className="sm:hidden">{(editedPlayers[player.id]?.position || getDefaultPositionForGameType(gameType)).slice(0,3)}</span>
-                                <span className="hidden sm:inline">{editedPlayers[player.id]?.position || getDefaultPositionForGameType(gameType)}</span>
+                                <span className="sm:hidden">{(editedPlayers[player.id]?.position || getPredefinedBasePosition(getEditedValue(player.id, 'name', player.name), gameType)).slice(0,3)}</span>
+                                <span className="hidden sm:inline">{editedPlayers[player.id]?.position || getPredefinedBasePosition(getEditedValue(player.id, 'name', player.name), gameType)}</span>
                               </Badge>
                               )}
                               <button
                                 type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
+                            onClick={(e) => {
+                              e.stopPropagation()
                                   setEditingPredefinedPositionId(prev => prev === player.id ? null : player.id)
                                 }}
                                 className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
@@ -531,24 +616,24 @@ export default function FootballTeams() {
                               className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full"
                               style={{ width: `${needed > 0 ? (current / needed) * 100 : 0}%` }}
                             />
-                          </div>
+                          </div>F
                         </>
                       )
                     })()}
-                  </div>
+                </div>
 
-                  <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                     {(() => {
                       const needed = gameType ? (gameTypes[gameType].playersPerTeam * 2) : 0
                       const missing = Math.max(0, needed - (players.length + selectedPredefinedPlayers.length))
                       if (needed > 0 && missing > 0) {
                         return (
-                          <Button
-                            onClick={addPredefinedPlayers}
-                            disabled={selectedPredefinedPlayers.length === 0}
-                            className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-lg active:from-yellow-600 active:to-orange-600 transition-all duration-200 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <Star className="h-4 w-4 mr-2" />
+                  <Button
+                    onClick={addPredefinedPlayers}
+                    disabled={selectedPredefinedPlayers.length === 0}
+                    className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-lg active:from-yellow-600 active:to-orange-600 transition-all duration-200 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Star className="h-4 w-4 mr-2" />
                             {`Faltam ${missing} jogador${missing !== 1 ? 'es' : ''}`}
                           </Button>
                         )
@@ -584,26 +669,26 @@ export default function FootballTeams() {
                             ) : (
                               "Gerar Times"
                             )}
-                          </Button>
+                  </Button>
                         )
                       }
                       return null
                     })()}
 
-                    {selectedPredefinedPlayers.length > 0 && (
-                      <Button
-                        variant="outline"
-                        onClick={() => setSelectedPredefinedPlayers([])}
+                  {selectedPredefinedPlayers.length > 0 && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setSelectedPredefinedPlayers([])}
                         className="text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={isLoading || (() => {
                           const needed = gameType ? (gameTypes[gameType].playersPerTeam * 2) : 0
                           const missing = Math.max(0, needed - (players.length + selectedPredefinedPlayers.length))
                           return needed > 0 && missing === 0
                         })()}
-                      >
-                        Limpar Seleção
-                      </Button>
-                    )}
+                    >
+                      Limpar Seleção
+                    </Button>
+                  )}
                   </div>
                 </div>
               </CardContent>
@@ -714,15 +799,18 @@ export default function FootballTeams() {
             {teams.map((team, index) => (
               <Card
                 key={index}
-                className={`bg-gray-50/60 dark:bg-gray-900/60 backdrop-blur-md border-2 shadow-xl ${
+                className={`backdrop-blur-md border-2 shadow-xl ${
                   index === 0
-                    ? "border-emerald-300/50 dark:border-emerald-500/30"
-                    : "border-blue-300/50 dark:border-blue-500/30"
+                    ? "bg-yellow-50/70 dark:bg-yellow-900/20 border-yellow-300/60 dark:border-yellow-500/40"
+                    : "bg-blue-50/70 dark:bg-blue-900/20 border-blue-300/60 dark:border-blue-500/40"
                 }`}
               >
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between text-gray-800 dark:text-gray-100 text-lg sm:text-xl">
-                    <span className="truncate">{team.name}</span>
+                    <span className="truncate flex items-center gap-2">
+                      <span className={`${index === 0 ? 'bg-yellow-400' : 'bg-blue-500'} inline-block w-3 h-3 rounded-full ring-2 ${index === 0 ? 'ring-yellow-200 dark:ring-yellow-700/50' : 'ring-blue-200 dark:ring-blue-700/50'}`}></span>
+                      {team.name}
+                    </span>
 
                   </CardTitle>
                 </CardHeader>
@@ -736,13 +824,20 @@ export default function FootballTeams() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-1.5 w-full">
                             <p className="font-medium text-gray-800 dark:text-gray-100 text-sm sm:text-base overflow-hidden whitespace-nowrap flex-1 min-w-0">{player.name}</p>
-                        <Badge
-                          variant="secondary"
-                              className="bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50 text-purple-700 dark:text-purple-300 text-[9px] sm:text-[10px] leading-none px-1 py-0 max-w-[44px] sm:max-w-[56px] truncate"
-                        >
-                              <span className="sm:hidden">{player.position.slice(0,3)}</span>
-                              <span className="hidden sm:inline">{player.position}</span>
-                        </Badge>
+                                {(() => {
+                                  const pos = player.position
+                                  const isGol = pos.toLowerCase().includes('gol') || pos.toLowerCase().includes('goleiro')
+                                  const base = "text-[9px] sm:text-[10px] leading-none px-1 py-0 max-w-[44px] sm:max-w-[56px] truncate"
+                                  const cls = isGol
+                                    ? `inline-flex bg-gradient-to-r from-blue-100 to-cyan-100 dark:from-blue-900/50 dark:to-cyan-900/50 text-blue-700 dark:text-blue-300 ${base}`
+                                    : `inline-flex bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50 text-purple-700 dark:text-purple-300 ${base}`
+                                  return (
+                                    <Badge variant="secondary" className={cls}>
+                                      <span className="sm:hidden">{pos.slice(0,3)}</span>
+                                      <span className="hidden sm:inline">{pos}</span>
+                                    </Badge>
+                                  )
+                                })()}
                           </div>
                         </div>
                       </div>
