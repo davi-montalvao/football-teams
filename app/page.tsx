@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Trash2, Users, Trophy, Star, Plus, Pencil } from "lucide-react"
 import { useIsMobile } from "@/components/ui/use-mobile"
+import { useToast } from "@/components/ui/use-toast"
 
 interface Player {
   id: string
@@ -63,12 +64,14 @@ const getDefaultPositionForGameType = (gameType: keyof typeof gameTypes | ""): s
 }
 
   // Lista pré-definida de jogadores (ordem alfabética)
-  const predefinedPlayers: PredefinedPlayer[] = [
+  const initialPredefinedPlayers: PredefinedPlayer[] = [
     "Bruno",
     "Bruno P",
     "Boka",
+    "Carlos",
     "Cassio",
     "Davi",
+    "Daniel",
     "Diógenes",
     "Eduardo",
     "Fabio Sanches",
@@ -109,6 +112,7 @@ export default function FootballTeams() {
   const [players, setPlayers] = useState<Player[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [gameType, setGameType] = useState<keyof typeof gameTypes | "">("")
+  const [predefined, setPredefined] = useState<PredefinedPlayer[]>(initialPredefinedPlayers)
   const [newPlayer, setNewPlayer] = useState({
     name: "",
     position: "",
@@ -120,6 +124,8 @@ export default function FootballTeams() {
   const [editingPredefinedPositionId, setEditingPredefinedPositionId] = useState<string | null>(null)
   const [editingRegisteredPositionId, setEditingRegisteredPositionId] = useState<string | null>(null)
   const isMobile = useIsMobile()
+  const { toast } = useToast()
+  const teamsSectionRef = useRef<HTMLDivElement | null>(null)
 
   const addPlayer = () => {
     if (newPlayer.name && newPlayer.position && gameType) {
@@ -128,7 +134,23 @@ export default function FootballTeams() {
         name: newPlayer.name,
         position: newPlayer.position,
       }
-      setPlayers([...players, player])
+      // Em vez de cadastrar direto, adiciona à lista de disponíveis
+      setPredefined(prev => {
+        const next = [
+          ...prev,
+          {
+            id: player.id,
+            name: player.name,
+            defaultPositions: {
+              futsal: positionsByGameType.futsal,
+              society: positionsByGameType.society,
+              campo: positionsByGameType.campo,
+            },
+          },
+        ]
+        // mantém em ordem alfabética
+        return next.sort((a, b) => a.name.localeCompare(b.name))
+      })
       setNewPlayer({ name: "", position: "" })
     }
   }
@@ -149,7 +171,7 @@ export default function FootballTeams() {
     if (!gameType || selectedPredefinedPlayers.length === 0) return
 
     const newPlayers: Player[] = selectedPredefinedPlayers.map((playerId) => {
-      const predefinedPlayer = predefinedPlayers.find((p) => p.id === playerId)!
+      const predefinedPlayer = predefined.find((p) => p.id === playerId)!
       const chosenPosition = editedPlayers[playerId]?.position || getDefaultPositionForGameType(gameType)
 
       // Usar dados editados se existirem, senão usar padrão
@@ -166,6 +188,21 @@ export default function FootballTeams() {
     setPlayers([...players, ...newPlayers])
     setSelectedPredefinedPlayers([])
     setEditingPredefinedPositionId(null)
+  }
+
+  const buildPlayersFromSelection = (): Player[] => {
+    if (!gameType || selectedPredefinedPlayers.length === 0) return []
+    return selectedPredefinedPlayers.map((playerId) => {
+      const predefinedPlayer = predefined.find((p) => p.id === playerId)!
+      const chosenPosition = editedPlayers[playerId]?.position || getDefaultPositionForGameType(gameType)
+      const editedData = editedPlayers[playerId] || {}
+      const finalName = editedData.name || predefinedPlayer.name
+      return {
+        id: `predefined_${playerId}`,
+        name: finalName,
+        position: chosenPosition,
+      }
+    })
   }
 
   const startEditing = (playerId: string, field: 'name') => {
@@ -195,38 +232,95 @@ export default function FootballTeams() {
     return defaultValue
   }
 
-  const generateTeams = async () => {
+  const generateTeams = async (sourcePlayers?: Player[]) => {
     if (!gameType) return
 
     const playersPerTeam = gameTypes[gameType].playersPerTeam
     const totalPlayersNeeded = playersPerTeam * 2
 
-    if (players.length < totalPlayersNeeded) {
-      alert(`Você precisa de pelo menos ${totalPlayersNeeded} jogadores para ${gameTypes[gameType].name}`)
+    const pool = (sourcePlayers ?? players)
+
+    if (pool.length < totalPlayersNeeded) {
+      toast({
+        title: "Jogadores insuficientes",
+        description: `Você precisa de pelo menos ${totalPlayersNeeded} jogadores para ${gameTypes[gameType].name}.`,
+        variant: "destructive",
+      })
       return
     }
 
     setIsLoading(true)
+    toast({ title: "Formando Times...", description: "Estamos balanceando as posições." })
 
-    // Simula um pequeno delay para mostrar o loading
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1500))
 
-    // Embaralha e distribui alternadamente (sem skill)
-    const shuffled = [...players].slice(0, totalPlayersNeeded).sort(() => Math.random() - 0.5)
-    const team1: Player[] = []
-    const team2: Player[] = []
-    shuffled.forEach((player, index) => {
-      if (index % 2 === 0) team1.push(player)
-      else team2.push(player)
-    })
+      // Balanceamento por posição: goleiro, defesa, meio, ataque (ajustado por modalidade)
+      const selected = [...pool].slice(0, totalPlayersNeeded)
 
-    const newTeams: Team[] = [
-      { name: "Time A", players: team1 },
-      { name: "Time B", players: team2 },
-    ]
+      const roleOf = (position: string): 'gol' | 'def' | 'meio' | 'ata' => {
+        const p = position.toLowerCase()
+        if (p.includes('gol')) return 'gol'
+        if (p.includes('goleiro')) return 'gol'
+        if (p.includes('zag')) return 'def'
+        if (p.includes('zagueiro')) return 'def'
+        if (p.includes('lat')) return 'def'
+        if (p.includes('lateral')) return 'def'
+        if (p.includes('fixo')) return 'def'
+        if (p.includes('volante')) return 'meio'
+        if (p.includes('meio')) return 'meio'
+        if (p.includes('ala')) return 'meio'
+        if (p.includes('meia a')) return 'meio'
+        if (p.includes('ponta') || p.includes('ponte')) return 'ata'
+        if (p.includes('pivô') || p.includes('pivo')) return 'ata'
+        if (p.includes('ata')) return 'ata'
+        if (p.includes('centroav')) return 'ata'
+        return 'meio'
+      }
 
-    setTeams(newTeams)
-    setIsLoading(false)
+      const groups: Record<'gol' | 'def' | 'meio' | 'ata', Player[]> = { gol: [], def: [], meio: [], ata: [] }
+      selected.forEach(player => groups[roleOf(player.position)].push(player))
+
+      // Validação de goleiros: precisa de pelo menos 2 para ter 1 em cada time
+      if (groups.gol.length < 2) {
+        toast({
+          title: "Faltam goleiros",
+          description: "É necessário ter ao menos 2 goleiros para formar times (1 por time).",
+          variant: "destructive",
+        })
+        return
+      }
+
+      Object.values(groups).forEach(arr => arr.sort(() => Math.random() - 0.5))
+
+      const team1: Player[] = []
+      const team2: Player[] = []
+
+      const distribute = (arr: Player[]) => {
+        arr.forEach((player, idx) => {
+          if (idx % 2 === 0) team1.push(player)
+          else team2.push(player)
+        })
+      }
+
+      // garante goleiros equilibrados primeiro
+      distribute(groups.gol)
+      distribute(groups.def)
+      distribute(groups.meio)
+      distribute(groups.ata)
+
+      const built: Team[] = [
+        { name: "Time A", players: team1 },
+        { name: "Time B", players: team2 },
+      ]
+      setTeams(built)
+      toast({ title: "Times gerados!", description: "Times balanceados por posição com sucesso." })
+      setTimeout(() => {
+        teamsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 50)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -292,7 +386,7 @@ export default function FootballTeams() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                  {predefinedPlayers.map((player) => (
+                  {predefined.map((player) => (
                     <div
                       key={player.id}
                       className={`flex items-center space-x-2 p-3 rounded-lg border-2 transition-all duration-200 cursor-pointer ${
@@ -301,9 +395,18 @@ export default function FootballTeams() {
                           : "border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 hover:border-gray-300 dark:hover:border-gray-600"
                       }`}
                       onClick={() => {
+                        const needed = gameType ? (gameTypes[gameType].playersPerTeam * 2) : 0
+                        const missing = Math.max(0, needed - (players.length + selectedPredefinedPlayers.length))
                         if (selectedPredefinedPlayers.includes(player.id)) {
                           setSelectedPredefinedPlayers(selectedPredefinedPlayers.filter(id => id !== player.id))
                         } else {
+                          if (needed > 0 && missing === 0) {
+                            toast({
+                              title: "Limite atingido",
+                              description: "Todos os jogadores necessários já foram selecionados.",
+                            })
+                            return
+                          }
                           setSelectedPredefinedPlayers([...selectedPredefinedPlayers, player.id])
                         }
                       }}
@@ -341,9 +444,18 @@ export default function FootballTeams() {
                               onClick={(e) => {
                                 e.stopPropagation()
                                 if (isMobile) {
+                                  const needed = gameType ? (gameTypes[gameType].playersPerTeam * 2) : 0
+                                  const missing = Math.max(0, needed - (players.length + selectedPredefinedPlayers.length))
                                   if (selectedPredefinedPlayers.includes(player.id)) {
                                     setSelectedPredefinedPlayers(selectedPredefinedPlayers.filter(id => id !== player.id))
                                   } else {
+                                    if (needed > 0 && missing === 0) {
+                                      toast({
+                                        title: "Limite atingido",
+                                        description: "Todos os jogadores necessários já foram selecionados.",
+                                      })
+                                      return
+                                    }
                                     setSelectedPredefinedPlayers([...selectedPredefinedPlayers, player.id])
                                   }
                                 } else {
@@ -405,29 +517,94 @@ export default function FootballTeams() {
                   ))}
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <Button
-                    onClick={addPredefinedPlayers}
-                    disabled={selectedPredefinedPlayers.length === 0}
-                    className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-lg active:from-yellow-600 active:to-orange-600 transition-all duration-200 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Star className="h-4 w-4 mr-2" />
+                {/* Rodapé fixo no mobile: progresso + ações */}
+                <div className="sm:static sticky bottom-0 left-0 right-0 z-10 -mx-4 px-4 py-2 bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur supports-[backdrop-filter]:bg-gray-50/70 border-t border-gray-200/40 dark:border-gray-700/40 space-y-2">
+                  <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+                    {(() => {
+                      const needed = gameType ? (gameTypes[gameType].playersPerTeam * 2) : 0
+                      const current = Math.min(needed, players.length + selectedPredefinedPlayers.length)
+                      return (
+                        <>
+                          <span>{current}/{needed} selecionados</span>
+                          <div className="flex-1 mx-3 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full"
+                              style={{ width: `${needed > 0 ? (current / needed) * 100 : 0}%` }}
+                            />
+                          </div>
+                        </>
+                      )
+                    })()}
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3">
                     {(() => {
                       const needed = gameType ? (gameTypes[gameType].playersPerTeam * 2) : 0
                       const missing = Math.max(0, needed - (players.length + selectedPredefinedPlayers.length))
-                      return `Faltam ${missing} jogador${missing !== 1 ? 'es' : ''}`
+                      if (needed > 0 && missing > 0) {
+                        return (
+                          <Button
+                            onClick={addPredefinedPlayers}
+                            disabled={selectedPredefinedPlayers.length === 0}
+                            className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-lg active:from-yellow-600 active:to-orange-600 transition-all duration-200 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Star className="h-4 w-4 mr-2" />
+                            {`Faltam ${missing} jogador${missing !== 1 ? 'es' : ''}`}
+                          </Button>
+                        )
+                      }
+                      return null
                     })()}
-                  </Button>
+                    {(() => {
+                      const needed = gameType ? (gameTypes[gameType].playersPerTeam * 2) : 0
+                      const missing = Math.max(0, needed - (players.length + selectedPredefinedPlayers.length))
+                      if (needed > 0 && missing === 0) {
+                        return (
+                          <Button
+                            onClick={() => {
+                              const newPlayers = buildPlayersFromSelection()
+                              const combined = newPlayers.length > 0 ? [...players, ...newPlayers] : players
+                              if (newPlayers.length > 0) {
+                                setPlayers(combined)
+                                setSelectedPredefinedPlayers([])
+                              }
+                              generateTeams(combined)
+                            }}
+                            disabled={isLoading}
+                            className="bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg active:from-purple-600 active:to-pink-600 transition-all duration-200 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isLoading ? (
+                              <div className="flex items-center gap-2">
+                                <div className="relative">
+                                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                  <div className="absolute inset-0 w-5 h-5 border-2 border-white/30 rounded-full"></div>
+                                </div>
+                                <span>Formando Times...</span>
+                              </div>
+                            ) : (
+                              "Gerar Times"
+                            )}
+                          </Button>
+                        )
+                      }
+                      return null
+                    })()}
 
-                  {selectedPredefinedPlayers.length > 0 && (
-                    <Button
-                      variant="outline"
-                      onClick={() => setSelectedPredefinedPlayers([])}
-                      className="text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600"
-                    >
-                      Limpar Seleção
-                    </Button>
-                  )}
+                    {selectedPredefinedPlayers.length > 0 && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setSelectedPredefinedPlayers([])}
+                        className="text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={isLoading || (() => {
+                          const needed = gameType ? (gameTypes[gameType].playersPerTeam * 2) : 0
+                          const missing = Math.max(0, needed - (players.length + selectedPredefinedPlayers.length))
+                          return needed > 0 && missing === 0
+                        })()}
+                      >
+                        Limpar Seleção
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -489,120 +666,7 @@ export default function FootballTeams() {
             </CardContent>
           </Card>
 
-        {/* Lista de Jogadores */}
-        {gameType && (
-          <Card className="bg-gray-50/60 dark:bg-gray-900/60 backdrop-blur-md border-gray-200/30 dark:border-gray-700/30 shadow-xl">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-gray-800 dark:text-gray-100 text-lg sm:text-xl">
-                <Users className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />
-                Jogadores Cadastrados ({players.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {players.length === 0 ? (
-                <p className="text-gray-500 dark:text-gray-400 text-center py-8 text-sm sm:text-base">Nenhum jogador cadastrado ainda</p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                  {players.map((player) => (
-                    <div
-                      key={player.id}
-                      className="flex items-center justify-between p-3 bg-gray-100/50 dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200/30 dark:border-gray-600/30 rounded-lg active:bg-gray-200/60 dark:active:bg-gray-700/60 transition-all duration-200"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-1.5 w-full">
-                        <p className="font-medium text-gray-800 dark:text-gray-100 text-sm sm:text-base overflow-hidden whitespace-nowrap flex-1 min-w-0">{player.name}</p>
-                            {editingRegisteredPositionId === player.id ? (
-                              <Select
-                                value={player.position}
-                                onValueChange={(value) => {
-                                  setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: value } : p))
-                                  setEditingRegisteredPositionId(null)
-                                }}
-                              >
-                                <SelectTrigger className="h-8 sm:h-6 w-[110px] sm:w-[130px] bg-gray-50/50 dark:bg-gray-800/50 border-gray-200/40 dark:border-gray-600/40 px-2 py-0">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-md">
-                                  {positionsByGameType[gameType].map((pos) => (
-                                    <SelectItem key={pos} value={pos}>
-                                      {pos}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                          <Badge
-                            variant="secondary"
-                                className="bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50 text-purple-700 dark:text-purple-300 text-[9px] sm:text-[10px] leading-none px-1 py-0 max-w-[44px] sm:max-w-[56px] truncate"
-                          >
-                            <span className="sm:hidden">{player.position.slice(0,3)}</span>
-                            <span className="hidden sm:inline">{player.position}</span>
-                          </Badge>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => setEditingRegisteredPositionId(prev => prev === player.id ? null : player.id)}
-                              className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-                              title="Editar posição"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </button>
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removePlayer(player.id)}
-                        className="text-red-500 active:text-red-600 active:bg-red-100/50 dark:active:bg-red-900/30 transition-colors duration-200 ml-2 flex-shrink-0"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Geração de Times */}
-        {gameType && players.length > 0 && (
-          <Card className="bg-gray-50/60 dark:bg-gray-900/60 backdrop-blur-md border-gray-200/30 dark:border-gray-700/30 shadow-xl">
-            <CardHeader>
-              <CardTitle className="text-gray-800 dark:text-gray-100 text-lg sm:text-xl">Formar Times</CardTitle>
-              <CardDescription className="text-gray-600 dark:text-gray-300 text-sm sm:text-base">
-                Gere times balanceados para {gameTypes[gameType].name}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-                <div>
-                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">
-                    Jogadores necessários: {gameTypes[gameType].playersPerTeam * 2} | Jogadores disponíveis:{" "}
-                    {players.length}
-                  </p>
-                </div>
-                <Button
-                  onClick={generateTeams}
-                  disabled={isLoading}
-                  className="bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg active:from-purple-600 active:to-pink-600 transition-all duration-200 text-sm sm:text-base w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isLoading ? (
-                    <div className="flex items-center gap-2">
-                      <div className="relative">
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <div className="absolute inset-0 w-5 h-5 border-2 border-white/30 rounded-full"></div>
-                      </div>
-                      <span>Formando Times...</span>
-                    </div>
-                  ) : (
-                    "Gerar Times"
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {/* Removido Jogadores Cadastrados: fluxo passa por Disponíveis */}
 
         {/* Loading com Bola de Futebol */}
         {isLoading && (
@@ -646,7 +710,7 @@ export default function FootballTeams() {
 
         {/* Times Gerados */}
         {teams.length > 0 && !isLoading && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+          <div ref={teamsSectionRef} className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             {teams.map((team, index) => (
               <Card
                 key={index}
