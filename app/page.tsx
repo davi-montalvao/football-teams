@@ -8,20 +8,18 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Trash2, Users, Trophy, Plus, Loader2, Star } from "lucide-react"
+import { Trash2, Users, Trophy, Star, Plus, Pencil } from "lucide-react"
 import { useIsMobile } from "@/components/ui/use-mobile"
 
 interface Player {
   id: string
   name: string
   position: string
-  skill: number
 }
 
 interface Team {
   name: string
   players: Player[]
-  averageSkill: number
 }
 
 interface PredefinedPlayer {
@@ -32,22 +30,21 @@ interface PredefinedPlayer {
     society: string[]
     campo: string[]
   }
-  defaultSkill: number
 }
 
 const positionsByGameType = {
-  futsal: ["Goleiro", "Fixo", "Ala Direito", "Ala Esquerdo", "Pivô"],
-  society: ["Goleiro", "Zagueiro", "Lateral Direito", "Lateral Esquerdo", "Meio-campo", "Atacante"],
+  futsal: ["Goleiro", "Fixo", "Ala D", "Ala E", "Pivô"],
+  society: ["Gol", "Zag", "Lat D", "Lat E", "Meio", "Ata"],
   campo: [
     "Goleiro",
     "Zagueiro",
-    "Lateral Direito",
-    "Lateral Esquerdo",
+    "Lat D",
+    "Lat E",
     "Volante",
-    "Meio-campo",
-    "Ponta Direita",
-    "Ponta Esquerda",
-    "Meia-atacante",
+    "Meio",
+    "Ponte D",
+    "Ponte E",
+    "Meia A",
     "Centroavante",
   ],
 }
@@ -58,32 +55,54 @@ const gameTypes = {
   campo: { name: "Campo", playersPerTeam: 11 },
 }
 
-  // Lista pré-definida de jogadores (em ordem alfabética)
+const getDefaultPositionForGameType = (gameType: keyof typeof gameTypes | ""): string => {
+  if (gameType === "futsal") return "Ala D"
+  if (gameType === "society") return "Meio"
+  if (gameType === "campo") return "Meio"
+  return "Meio-campo"
+}
+
+  // Lista pré-definida de jogadores (ordem alfabética)
   const predefinedPlayers: PredefinedPlayer[] = [
-    { id: "4", name: "Alex", defaultPositions: { futsal: ["Fixo", "Ala Direito"], society: ["Zagueiro", "Meio-campo"], campo: ["Zagueiro", "Volante"] }, defaultSkill: 5 },
-    { id: "18", name: "Anderson", defaultPositions: { futsal: ["Goleiro", "Fixo"], society: ["Goleiro", "Zagueiro"], campo: ["Goleiro", "Zagueiro"] }, defaultSkill: 5 },
-    { id: "22", name: "André", defaultPositions: { futsal: ["Fixo", "Goleiro"], society: ["Zagueiro", "Goleiro"], campo: ["Zagueiro", "Goleiro"] }, defaultSkill: 5 },
-    { id: "12", name: "Daniel", defaultPositions: { futsal: ["Ala Direito", "Pivô"], society: ["Lateral Direito", "Atacante"], campo: ["Lateral Direito", "Ponta Direita"] }, defaultSkill: 5 },
-    { id: "1", name: "Davi", defaultPositions: { futsal: ["Fixo", "Ala Direito"], society: ["Meio-campo", "Atacante"], campo: ["Meio-campo", "Meia-atacante"] }, defaultSkill: 5 },
-    { id: "23", name: "Eduardo", defaultPositions: { futsal: ["Ala Esquerdo", "Fixo"], society: ["Lateral Esquerdo", "Zagueiro"], campo: ["Lateral Esquerdo", "Zagueiro"] }, defaultSkill: 5 },
-    { id: "20", name: "Felipe Augusto", defaultPositions: { futsal: ["Fixo", "Ala Esquerdo"], society: ["Meio-campo", "Zagueiro"], campo: ["Meio-campo", "Volante"] }, defaultSkill: 5 },
-    { id: "15", name: "Filipe", defaultPositions: { futsal: ["Fixo", "Goleiro"], society: ["Zagueiro", "Goleiro"], campo: ["Zagueiro", "Goleiro"] }, defaultSkill: 5 },
-    { id: "3", name: "Flavio", defaultPositions: { futsal: ["Ala Esquerdo", "Pivô"], society: ["Lateral Esquerdo", "Atacante"], campo: ["Lateral Esquerdo", "Ponta Esquerda"] }, defaultSkill: 5 },
-    { id: "14", name: "Gustavo", defaultPositions: { futsal: ["Pivô", "Ala Direito"], society: ["Atacante", "Meio-campo"], campo: ["Centroavante", "Meia-atacante"] }, defaultSkill: 5 },
-    { id: "11", name: "Igor", defaultPositions: { futsal: ["Goleiro", "Fixo"], society: ["Goleiro", "Zagueiro"], campo: ["Goleiro", "Zagueiro"] }, defaultSkill: 5 },
-    { id: "13", name: "Jefferson", defaultPositions: { futsal: ["Fixo", "Ala Esquerdo"], society: ["Meio-campo", "Zagueiro"], campo: ["Meio-campo", "Volante"] }, defaultSkill: 5 },
-    { id: "7", name: "Kell", defaultPositions: { futsal: ["Fixo", "Ala Esquerdo"], society: ["Meio-campo", "Atacante"], campo: ["Meio-campo", "Meia-atacante"] }, defaultSkill: 5 },
-    { id: "21", name: "Leopoldo", defaultPositions: { futsal: ["Pivô", "Ala Direito"], society: ["Atacante", "Meio-campo"], campo: ["Centroavante", "Meia-atacante"] }, defaultSkill: 5 },
-    { id: "9", name: "Léo", defaultPositions: { futsal: ["Fixo", "Goleiro"], society: ["Zagueiro", "Goleiro"], campo: ["Zagueiro", "Goleiro"] }, defaultSkill: 5 },
-    { id: "19", name: "Lopes", defaultPositions: { futsal: ["Ala Direito", "Pivô"], society: ["Lateral Direito", "Atacante"], campo: ["Lateral Direito", "Ponta Direita"] }, defaultSkill: 5 },
-    { id: "2", name: "Marcio", defaultPositions: { futsal: ["Goleiro", "Fixo"], society: ["Goleiro", "Zagueiro"], campo: ["Goleiro", "Zagueiro"] }, defaultSkill: 5 },
-    { id: "17", name: "Martins", defaultPositions: { futsal: ["Fixo", "Ala Direito"], society: ["Meio-campo", "Atacante"], campo: ["Meio-campo", "Meia-atacante"] }, defaultSkill: 5 },
-    { id: "6", name: "Paulo", defaultPositions: { futsal: ["Ala Direito", "Pivô"], society: ["Lateral Direito", "Atacante"], campo: ["Lateral Direito", "Ponta Direita"] }, defaultSkill: 5 },
-    { id: "8", name: "Pedro", defaultPositions: { futsal: ["Pivô", "Ala Direito"], society: ["Atacante", "Meio-campo"], campo: ["Centroavante", "Meia-atacante"] }, defaultSkill: 5 },
-    { id: "10", name: "Tião", defaultPositions: { futsal: ["Ala Esquerdo", "Fixo"], society: ["Lateral Esquerdo", "Zagueiro"], campo: ["Lateral Esquerdo", "Zagueiro"] }, defaultSkill: 5 },
-    { id: "5", name: "Vitor", defaultPositions: { futsal: ["Goleiro", "Fixo"], society: ["Goleiro", "Zagueiro"], campo: ["Goleiro", "Zagueiro"] }, defaultSkill: 5 },
-    { id: "16", name: "Wellington", defaultPositions: { futsal: ["Ala Esquerdo", "Fixo"], society: ["Lateral Esquerdo", "Zagueiro"], campo: ["Lateral Esquerdo", "Zagueiro"] }, defaultSkill: 5 },
-  ]
+    "Bruno",
+    "Bruno P",
+    "Boka",
+    "Cassio",
+    "Diógenes",
+    "Eduardo",
+    "Fabio Sanches",
+    "Felipe Augusto",
+    "Guiomar",
+    "Guimaraes",
+    "JP",
+    "Jean",
+    "Jota",
+    "Kebler 🧤",
+    "Klebinho",
+    "Leopoldo",
+    "Ley",
+    "Lopes",
+    "Lucas",
+    "Lukinhas",
+    "Marcelinho",
+    "Mariano",
+    "Marcio",
+    "Miquéias",
+    "Peter",
+    "Renato R",
+    "Ronaldinho",
+    "Tagavas",
+    "Vinicius",
+    "Wedson",
+  ].sort((a, b) => a.localeCompare(b)).map((name, index) => ({
+    id: String(index + 1),
+    name,
+    defaultPositions: {
+      futsal: positionsByGameType.futsal,
+      society: positionsByGameType.society,
+      campo: positionsByGameType.campo,
+    },
+  }))
 
 export default function FootballTeams() {
   const [players, setPlayers] = useState<Player[]>([])
@@ -92,12 +111,13 @@ export default function FootballTeams() {
   const [newPlayer, setNewPlayer] = useState({
     name: "",
     position: "",
-    skill: 5,
   })
   const [isLoading, setIsLoading] = useState(false)
   const [selectedPredefinedPlayers, setSelectedPredefinedPlayers] = useState<string[]>([])
-  const [editingPlayer, setEditingPlayer] = useState<{id: string, field: 'name' | 'skill'} | null>(null)
-  const [editedPlayers, setEditedPlayers] = useState<{[key: string]: {name: string, skill: number}}>({})
+  const [editingPlayer, setEditingPlayer] = useState<{id: string, field: 'name'} | null>(null)
+  const [editedPlayers, setEditedPlayers] = useState<{[key: string]: {name?: string, position?: string}}>({})
+  const [editingPredefinedPositionId, setEditingPredefinedPositionId] = useState<string | null>(null)
+  const [editingRegisteredPositionId, setEditingRegisteredPositionId] = useState<string | null>(null)
   const isMobile = useIsMobile()
 
   const addPlayer = () => {
@@ -106,10 +126,9 @@ export default function FootballTeams() {
         id: Date.now().toString(),
         name: newPlayer.name,
         position: newPlayer.position,
-        skill: newPlayer.skill,
       }
       setPlayers([...players, player])
-      setNewPlayer({ name: "", position: "", skill: 5 })
+      setNewPlayer({ name: "", position: "" })
     }
   }
 
@@ -121,7 +140,7 @@ export default function FootballTeams() {
     setGameType(value)
     setPlayers([])
     setTeams([])
-    setNewPlayer({ name: "", position: "", skill: 5 })
+    setNewPlayer({ name: "", position: "" })
     setSelectedPredefinedPlayers([])
   }
 
@@ -130,31 +149,29 @@ export default function FootballTeams() {
 
     const newPlayers: Player[] = selectedPredefinedPlayers.map((playerId) => {
       const predefinedPlayer = predefinedPlayers.find((p) => p.id === playerId)!
-      const availablePositions = predefinedPlayer.defaultPositions[gameType]
-      const randomPosition = availablePositions[Math.floor(Math.random() * availablePositions.length)]
+      const chosenPosition = editedPlayers[playerId]?.position || getDefaultPositionForGameType(gameType)
 
       // Usar dados editados se existirem, senão usar padrão
       const editedData = editedPlayers[playerId] || {}
       const finalName = editedData.name || predefinedPlayer.name
-      const finalSkill = editedData.skill || predefinedPlayer.defaultSkill
 
       return {
         id: `predefined_${playerId}`,
         name: finalName,
-        position: randomPosition,
-        skill: finalSkill,
+        position: chosenPosition,
       }
     })
 
     setPlayers([...players, ...newPlayers])
     setSelectedPredefinedPlayers([])
+    setEditingPredefinedPositionId(null)
   }
 
-  const startEditing = (playerId: string, field: 'name' | 'skill') => {
+  const startEditing = (playerId: string, field: 'name') => {
     setEditingPlayer({ id: playerId, field })
   }
 
-  const saveEdit = (playerId: string, value: string | number) => {
+  const saveEdit = (playerId: string, value: string) => {
     setEditedPlayers(prev => ({
       ...prev,
       [playerId]: {
@@ -169,7 +186,7 @@ export default function FootballTeams() {
     setEditingPlayer(null)
   }
 
-  const getEditedValue = (playerId: string, field: 'name' | 'skill', defaultValue: string | number) => {
+  const getEditedValue = (playerId: string, field: 'name', defaultValue: string) => {
     const editedData = editedPlayers[playerId]
     if (editedData && editedData[field] !== undefined) {
       return editedData[field]
@@ -193,34 +210,18 @@ export default function FootballTeams() {
     // Simula um pequeno delay para mostrar o loading
     await new Promise(resolve => setTimeout(resolve, 1500))
 
-    // Algoritmo simples para balancear times por habilidade
-    const sortedPlayers = [...players].sort((a, b) => b.skill - a.skill)
+    // Embaralha e distribui alternadamente (sem skill)
+    const shuffled = [...players].slice(0, totalPlayersNeeded).sort(() => Math.random() - 0.5)
     const team1: Player[] = []
     const team2: Player[] = []
-
-    // Distribui jogadores alternadamente para balancear
-    sortedPlayers.slice(0, totalPlayersNeeded).forEach((player, index) => {
-      if (index % 2 === 0) {
-        team1.push(player)
-      } else {
-        team2.push(player)
-      }
+    shuffled.forEach((player, index) => {
+      if (index % 2 === 0) team1.push(player)
+      else team2.push(player)
     })
 
-    const calculateAverage = (teamPlayers: Player[]) =>
-      teamPlayers.reduce((sum, p) => sum + p.skill, 0) / teamPlayers.length
-
     const newTeams: Team[] = [
-      {
-        name: "Time A",
-        players: team1,
-        averageSkill: calculateAverage(team1),
-      },
-      {
-        name: "Time B",
-        players: team2,
-        averageSkill: calculateAverage(team2),
-      },
+      { name: "Time A", players: team1 },
+      { name: "Time B", players: team2 },
     ]
 
     setTeams(newTeams)
@@ -236,8 +237,8 @@ export default function FootballTeams() {
             <Trophy className="h-6 w-6 sm:h-8 sm:w-8 text-transparent bg-gradient-to-r from-emerald-500 to-blue-500 bg-clip-text flex-shrink-0 mt-1" />
             <div className="flex-1">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent leading-tight">
-                Formador de Times
-              </h1>
+              Formador de Times
+            </h1>
               <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 leading-relaxed mt-1 sm:mt-2">
                 Cadastre jogadores e forme times balanceados automaticamente
               </p>
@@ -277,78 +278,7 @@ export default function FootballTeams() {
 
         {gameType && (
           <>
-            {/* Cadastro Manual de Jogador */}
-            <Card className="bg-gray-50/60 dark:bg-gray-900/60 backdrop-blur-md border-gray-200/30 dark:border-gray-700/30 shadow-xl">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-gray-800 dark:text-gray-100 text-lg sm:text-xl">
-                  <Plus className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-500" />
-                  Cadastrar Novo Jogador - {gameTypes[gameType].name}
-                </CardTitle>
-                <CardDescription className="text-gray-600 dark:text-gray-300 text-sm sm:text-base">
-                  Adicione jogadores personalizados com suas posições específicas para {gameTypes[gameType].name}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                  <div className="sm:col-span-2 lg:col-span-1">
-                    <Label htmlFor="name" className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
-                      Nome
-                    </Label>
-                    <Input
-                      id="name"
-                      value={newPlayer.name}
-                      onChange={(e) => setNewPlayer({ ...newPlayer, name: e.target.value })}
-                      placeholder="Nome do jogador"
-                      className="bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/40 dark:border-gray-600/40"
-                    />
-                  </div>
-                  <div className="sm:col-span-2 lg:col-span-1">
-                    <Label htmlFor="position" className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
-                      Posição
-                    </Label>
-                    <Select
-                      value={newPlayer.position}
-                      onValueChange={(value) => setNewPlayer({ ...newPlayer, position: value })}
-                    >
-                      <SelectTrigger className="bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/40 dark:border-gray-600/40">
-                        <SelectValue placeholder="Selecione a posição" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-md">
-                        {positionsByGameType[gameType].map((pos) => (
-                          <SelectItem key={pos} value={pos}>
-                            {pos}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="skill" className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
-                      Habilidade (1-10)
-                    </Label>
-                    <Input
-                      id="skill"
-                      type="number"
-                      min="1"
-                      max="10"
-                      value={newPlayer.skill}
-                      onChange={(e) => setNewPlayer({ ...newPlayer, skill: Number.parseInt(e.target.value) || 5 })}
-                      className="bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/40 dark:border-gray-600/40"
-                    />
-                  </div>
-                  <div className="flex items-end">
-                    <Button
-                      onClick={addPlayer}
-                      className="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white shadow-lg active:from-emerald-600 active:to-blue-600 transition-all duration-200 text-sm sm:text-base"
-                    >
-                      {isMobile ? "Adicionar" : "Adicionar Jogador"}
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Lista de Jogadores Pré-definidos */}
+            {/* Jogadores Disponíveis */}
             <Card className="bg-gray-50/60 dark:bg-gray-900/60 backdrop-blur-md border-gray-200/30 dark:border-gray-700/30 shadow-xl">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-gray-800 dark:text-gray-100 text-lg sm:text-xl">
@@ -356,7 +286,7 @@ export default function FootballTeams() {
                   Jogadores Disponíveis
                 </CardTitle>
                 <CardDescription className="text-gray-600 dark:text-gray-300 text-sm sm:text-base">
-                  Selecione os jogadores que vão participar. Clique no nome ou skill para editar.
+                  Selecione os jogadores que vão participar. Clique no nome para editar.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -402,6 +332,7 @@ export default function FootballTeams() {
                             autoFocus
                           />
                         ) : (
+                          <div className="flex items-center gap-2">
                           <p
                             className="font-medium text-gray-800 dark:text-gray-100 text-sm truncate hover:bg-gray-100 dark:hover:bg-gray-700 px-1 py-0.5 rounded cursor-text"
                             onClick={(e) => {
@@ -412,40 +343,45 @@ export default function FootballTeams() {
                           >
                             {getEditedValue(player.id, 'name', player.name)}
                           </p>
-                        )}
-
-                        {editingPlayer?.id === player.id && editingPlayer.field === 'skill' ? (
-                          <Input
-                            type="number"
-                            min="1"
-                            max="10"
-                            value={getEditedValue(player.id, 'skill', player.defaultSkill)}
-                            onChange={(e) => setEditedPlayers(prev => ({
+                            {editingPredefinedPositionId === player.id ? (
+                              <Select
+                                value={editedPlayers[player.id]?.position || getDefaultPositionForGameType(gameType)}
+                                onValueChange={(value) => setEditedPlayers(prev => ({
                               ...prev,
-                              [player.id]: { ...prev[player.id], skill: Number(e.target.value) || 5 }
-                            }))}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                saveEdit(player.id, Number(e.currentTarget.value) || 5)
-                              } else if (e.key === 'Escape') {
-                                cancelEdit()
-                              }
-                            }}
-                            onBlur={() => saveEdit(player.id, getEditedValue(player.id, 'skill', player.defaultSkill))}
-                            className="h-6 text-sm p-1 w-12"
-                            autoFocus
-                          />
-                        ) : (
-                          <p
-                            className="text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 px-1 py-0.5 rounded cursor-text"
+                                  [player.id]: { ...prev[player.id], position: value }
+                                }))}
+                              >
+                                <SelectTrigger className="h-8 sm:h-6 w-[110px] sm:w-[130px] bg-gray-50/50 dark:bg-gray-800/50 border-gray-200/40 dark:border-gray-600/40 px-2 py-0">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-md">
+                                  {positionsByGameType[gameType].map((pos) => (
+                                    <SelectItem key={pos} value={pos}>
+                                      {pos}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Badge
+                                variant="secondary"
+                                className="bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50 text-purple-700 dark:text-purple-300 text-[9px] sm:text-[10px] leading-none px-1 py-0 max-w-[44px] sm:max-w-[56px] truncate"
+                              >
+                                {editedPlayers[player.id]?.position || getDefaultPositionForGameType(gameType)}
+                              </Badge>
+                            )}
+                            <button
+                              type="button"
                             onClick={(e) => {
                               e.stopPropagation()
-                              startEditing(player.id, 'skill')
+                                setEditingPredefinedPositionId(prev => prev === player.id ? null : player.id)
                             }}
-                            title="Clique para editar a skill"
+                              className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+                              title="Editar posição"
                           >
-                            Skill: {getEditedValue(player.id, 'skill', player.defaultSkill)}/10
-                          </p>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -459,7 +395,11 @@ export default function FootballTeams() {
                     className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-lg active:from-yellow-600 active:to-orange-600 transition-all duration-200 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Star className="h-4 w-4 mr-2" />
-                    Adicionar {selectedPredefinedPlayers.length} Jogador{selectedPredefinedPlayers.length !== 1 ? 'es' : ''}
+                    {(() => {
+                      const needed = gameType ? (gameTypes[gameType].playersPerTeam * 2) : 0
+                      const missing = Math.max(0, needed - (players.length + selectedPredefinedPlayers.length))
+                      return `Faltam ${missing} jogador${missing !== 1 ? 'es' : ''}`
+                    })()}
                   </Button>
 
                   {selectedPredefinedPlayers.length > 0 && (
@@ -475,7 +415,7 @@ export default function FootballTeams() {
               </CardContent>
             </Card>
 
-            {/* Cadastro Manual de Jogador */}
+            {/* Cadastrar Novo Jogador */}
             <Card className="bg-gray-50/60 dark:bg-gray-900/60 backdrop-blur-md border-gray-200/30 dark:border-gray-700/30 shadow-xl">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-gray-800 dark:text-gray-100 text-lg sm:text-xl">
@@ -483,12 +423,12 @@ export default function FootballTeams() {
                   Cadastrar Novo Jogador - {gameTypes[gameType].name}
                 </CardTitle>
                 <CardDescription className="text-gray-600 dark:text-gray-300 text-sm sm:text-base">
-                  Adicione jogadores personalizados com suas posições específicas para {gameTypes[gameType].name}
+                  Adicione um jogador personalizado informando nome e posição
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                  <div className="sm:col-span-2 lg:col-span-1">
+                  <div className="sm:col-span-2 lg:col-span-2">
                     <Label htmlFor="name" className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
                       Nome
                     </Label>
@@ -500,7 +440,7 @@ export default function FootballTeams() {
                       className="bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/40 dark:border-gray-600/40"
                     />
                   </div>
-                  <div className="sm:col-span-2 lg:col-span-1">
+                  <div className="sm:col-span-2 lg:col-span-2">
                     <Label htmlFor="position" className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
                       Posição
                     </Label>
@@ -520,33 +460,17 @@ export default function FootballTeams() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <Label htmlFor="skill" className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
-                      Habilidade (1-10)
-                    </Label>
-                    <Input
-                      id="skill"
-                      type="number"
-                      min="1"
-                      max="10"
-                      value={newPlayer.skill}
-                      onChange={(e) => setNewPlayer({ ...newPlayer, skill: Number.parseInt(e.target.value) || 5 })}
-                      className="bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/40 dark:border-gray-600/40"
-                    />
-                  </div>
                   <div className="flex items-end">
                     <Button
                       onClick={addPlayer}
                       className="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white shadow-lg active:from-emerald-600 active:to-blue-600 transition-all duration-200 text-sm sm:text-base"
                     >
                       {isMobile ? "Adicionar" : "Adicionar Jogador"}
-                    </Button>
-                  </div>
+                  </Button>
                 </div>
-              </CardContent>
-            </Card>
-          </>
-        )}
+              </div>
+            </CardContent>
+          </Card>
 
         {/* Lista de Jogadores */}
         {gameType && (
@@ -568,15 +492,43 @@ export default function FootballTeams() {
                       className="flex items-center justify-between p-3 bg-gray-100/50 dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200/30 dark:border-gray-600/30 rounded-lg active:bg-gray-200/60 dark:active:bg-gray-700/60 transition-all duration-200"
                     >
                       <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
                         <p className="font-medium text-gray-800 dark:text-gray-100 text-sm sm:text-base truncate">{player.name}</p>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            {editingRegisteredPositionId === player.id ? (
+                              <Select
+                                value={player.position}
+                                onValueChange={(value) => {
+                                  setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, position: value } : p))
+                                  setEditingRegisteredPositionId(null)
+                                }}
+                              >
+                                <SelectTrigger className="h-8 sm:h-6 w-[110px] sm:w-[130px] bg-gray-50/50 dark:bg-gray-800/50 border-gray-200/40 dark:border-gray-600/40 px-2 py-0">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-md">
+                                  {positionsByGameType[gameType].map((pos) => (
+                                    <SelectItem key={pos} value={pos}>
+                                      {pos}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
                           <Badge
                             variant="secondary"
-                            className="bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50 text-purple-700 dark:text-purple-300 text-xs"
+                                className="bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50 text-purple-700 dark:text-purple-300 text-[9px] sm:text-[10px] leading-none px-1 py-0 max-w-[44px] sm:max-w-[56px] truncate"
                           >
                             {player.position}
                           </Badge>
-                          <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">Skill: {player.skill}/10</span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setEditingRegisteredPositionId(prev => prev === player.id ? null : player.id)}
+                              className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+                              title="Editar posição"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
                         </div>
                       </div>
                       <Button
@@ -689,16 +641,7 @@ export default function FootballTeams() {
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between text-gray-800 dark:text-gray-100 text-lg sm:text-xl">
                     <span className="truncate">{team.name}</span>
-                    <Badge
-                      variant="outline"
-                      className={`${
-                        index === 0
-                          ? "bg-gradient-to-r from-emerald-100 to-emerald-200 dark:from-emerald-900/50 dark:to-emerald-800/50 text-emerald-700 dark:text-emerald-300 border-emerald-300/50"
-                          : "bg-gradient-to-r from-blue-100 to-blue-200 dark:from-blue-900/50 dark:to-blue-800/50 text-blue-700 dark:text-blue-300 border-blue-300/50"
-                      } text-xs sm:text-sm`}
-                    >
-                      Média: {team.averageSkill.toFixed(1)}
-                    </Badge>
+
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -709,15 +652,16 @@ export default function FootballTeams() {
                         className="flex items-center justify-between p-2 bg-gray-100/40 dark:bg-gray-800/40 backdrop-blur-sm rounded border border-gray-200/30 dark:border-gray-600/30"
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="font-medium text-gray-800 dark:text-gray-100 text-sm sm:text-base truncate">{player.name}</p>
-                          <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 truncate">{player.position}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-medium text-gray-800 dark:text-gray-100 text-sm sm:text-base truncate flex-1 min-w-0">{player.name}</p>
+                            <Badge
+                              variant="secondary"
+                              className="bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50 text-purple-700 dark:text-purple-300 text-[9px] sm:text-[10px] leading-none px-1 py-0 max-w-[44px] sm:max-w-[56px] truncate"
+                            >
+                              {player.position}
+                            </Badge>
+                          </div>
                         </div>
-                        <Badge
-                          variant="secondary"
-                          className="bg-gradient-to-r from-orange-100 to-yellow-100 dark:from-orange-900/50 dark:to-yellow-900/50 text-orange-700 dark:text-orange-300 text-xs ml-2 flex-shrink-0"
-                        >
-                          {player.skill}/10
-                        </Badge>
                       </div>
                     ))}
                   </div>
@@ -725,6 +669,8 @@ export default function FootballTeams() {
               </Card>
             ))}
           </div>
+            )}
+          </>
         )}
       </div>
     </div>
