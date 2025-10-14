@@ -157,7 +157,7 @@ const getPredefinedBasePosition = (displayName: string, gameType: keyof typeof g
     "Jean",
     "Joaquim 🧤",
     "Jota",
-    "Kebler 🧤",
+    "Kleber 🧤",
     "Klebinho",
     "Leopoldo",
     "Ley",
