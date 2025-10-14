@@ -203,36 +203,6 @@ export default function FootballTeams() {
   const { toast } = useToast()
   const teamsSectionRef = useRef<HTMLDivElement | null>(null)
 
-  // Persistência em localStorage
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('ft_state')
-      if (saved) {
-        const data = JSON.parse(saved)
-        if (data.gameType) setGameType(data.gameType)
-        if (Array.isArray(data.predefined)) setPredefined(data.predefined)
-        if (data.selectedPredefinedPlayers) setSelectedPredefinedPlayers(data.selectedPredefinedPlayers)
-        if (data.editedPlayers) setEditedPlayers(data.editedPlayers)
-        if (Array.isArray(data.players)) setPlayers(data.players)
-        if (Array.isArray(data.teams)) setTeams(data.teams)
-      }
-    } catch {}
-  }, [])
-
-  useEffect(() => {
-    try {
-      const state = {
-        gameType,
-        predefined,
-        selectedPredefinedPlayers,
-        editedPlayers,
-        players,
-        teams,
-      }
-      localStorage.setItem('ft_state', JSON.stringify(state))
-    } catch {}
-  }, [gameType, predefined, selectedPredefinedPlayers, editedPlayers, players, teams])
-
   const addPlayer = () => {
     if (newPlayer.name && newPlayer.position && gameType) {
       const player: Player = {
