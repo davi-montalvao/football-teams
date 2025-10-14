@@ -603,6 +603,12 @@ export default function FootballTeams() {
                             <div className="flex items-center gap-1">
                               {editingPredefinedPositionId === player.id ? (
                               <Select
+                                open={editingPredefinedPositionId === player.id}
+                                onOpenChange={(open) => {
+                                  if (!open) {
+                                    setEditingPredefinedPositionId(null)
+                                  }
+                                }}
                                 value={editedPlayers[player.id]?.position || getPredefinedBasePosition(getEditedValue(player.id, 'name', player.name), gameType)}
                                 onValueChange={(value) => {
                                   setEditedPlayers(prev => ({
