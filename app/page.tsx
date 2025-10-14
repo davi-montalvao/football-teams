@@ -78,7 +78,7 @@ const getPositionBadgeClass = (position: string): string => {
 }
 
 // Mapeia nomes para papéis (ata, zag, le, etc.)
-const nameRoleOverrides: Record<string, 'ATA' | 'ZAG' | 'LE' | 'LD'> = {
+const nameRoleOverrides: Record<string, 'ATA' | 'ZAG' | 'LE' | 'LD' | 'MEIO'> = {
   'Boka': 'ATA',
   'Bruno P': 'ATA',
   'Lopes': 'ZAG',
@@ -98,11 +98,12 @@ const nameRoleOverrides: Record<string, 'ATA' | 'ZAG' | 'LE' | 'LD'> = {
   'Ley': 'ATA',
   'Marcelinho': 'ATA',
   'Mariano': 'LD',
+  'Michael': 'MEIO',
   'Anisio': 'ZAG',
 }
 
 // Converte o papel genérico para a posição por modalidade
-const mapRoleToPosition = (gameType: keyof typeof gameTypes | "", role: 'ATA' | 'ZAG' | 'LE' | 'LD'): string => {
+const mapRoleToPosition = (gameType: keyof typeof gameTypes | "", role: 'ATA' | 'ZAG' | 'LE' | 'LD' | 'MEIO'): string => {
   if (role === 'ATA') {
     if (gameType === 'futsal') return 'Pivô'
     if (gameType === 'society') return 'Ata'
@@ -122,6 +123,11 @@ const mapRoleToPosition = (gameType: keyof typeof gameTypes | "", role: 'ATA' | 
     if (gameType === 'futsal') return 'Ala D'
     if (gameType === 'society') return 'Lat D'
     if (gameType === 'campo') return 'Lat D'
+  }
+  if (role === 'MEIO') {
+    if (gameType === 'futsal') return 'Ala D'
+    if (gameType === 'society') return 'Meio'
+    if (gameType === 'campo') return 'Meio'
   }
   return getDefaultPositionForGameType(gameType)
 }
@@ -167,6 +173,7 @@ const getPredefinedBasePosition = (displayName: string, gameType: keyof typeof g
     "Marcelinho",
     "Mariano",
     "Marcio",
+    "Michael",
     "Miquéias",
     "Peter",
     "Renato R",
@@ -257,7 +264,7 @@ export default function FootballTeams() {
       const editedPos = editedPlayers[playerId]?.position
       const finalName = (editedPlayers[playerId]?.name || predefinedPlayer.name)
       const isGoalkeeper = finalName.includes("🧤")
-      const overrideRole = nameRoleOverrides[finalName.replace(' 🧤','')] as ('ATA'|'ZAG'|'LE') | undefined
+      const overrideRole = nameRoleOverrides[finalName.replace(' 🧤','')] as ('ATA'|'ZAG'|'LE'|'LD'|'MEIO') | undefined
       const overridePos = overrideRole ? mapRoleToPosition(gameType, overrideRole) : undefined
       const chosenPosition = editedPos || (isGoalkeeper ? getGoalkeeperPositionLabel(gameType) : (overridePos || getDefaultPositionForGameType(gameType)))
 
@@ -284,7 +291,7 @@ export default function FootballTeams() {
       const editedData = editedPlayers[playerId] || {}
       const finalName = editedData.name || predefinedPlayer.name
       const isGoalkeeper = finalName.includes("🧤")
-      const overrideRole = nameRoleOverrides[finalName.replace(' 🧤','')] as ('ATA'|'ZAG'|'LE') | undefined
+      const overrideRole = nameRoleOverrides[finalName.replace(' 🧤','')] as ('ATA'|'ZAG'|'LE'|'LD'|'MEIO') | undefined
       const overridePos = overrideRole ? mapRoleToPosition(gameType, overrideRole) : undefined
       const chosenPosition = editedPos || (isGoalkeeper ? getGoalkeeperPositionLabel(gameType) : (overridePos || getDefaultPositionForGameType(gameType)))
       return {
