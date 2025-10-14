@@ -395,16 +395,6 @@ export default function FootballTeams() {
       const groups: Record<'gol' | 'def' | 'meio' | 'ata', Player[]> = { gol: [], def: [], meio: [], ata: [] }
       selected.forEach(player => groups[roleOf(player.position)].push(player))
 
-      // Validação de goleiros: precisa de pelo menos 2 para ter 1 em cada time
-      if (groups.gol.length < 2) {
-        toast({
-          title: "Faltam goleiros",
-          description: "É necessário ter ao menos 2 goleiros para formar times (1 por time).",
-          variant: "destructive",
-        })
-        return
-      }
-
       Object.values(groups).forEach(arr => arr.sort(() => Math.random() - 0.5))
 
       const team1: Player[] = []
@@ -708,6 +698,39 @@ export default function FootballTeams() {
                             onClick={() => {
                               const newPlayers = buildPlayersFromSelection()
                               const combined = newPlayers.length > 0 ? [...players, ...newPlayers] : players
+
+                              // Validar goleiros antes de limpar seleção
+                              const roleOf = (position: string): 'gol' | 'def' | 'meio' | 'ata' => {
+                                const p = position.toLowerCase()
+                                if (p.includes('gol')) return 'gol'
+                                if (p.includes('goleiro')) return 'gol'
+                                if (p.includes('zag')) return 'def'
+                                if (p.includes('zagueiro')) return 'def'
+                                if (p.includes('lat')) return 'def'
+                                if (p.includes('lateral')) return 'def'
+                                if (p.includes('fixo')) return 'def'
+                                if (p.includes('volante')) return 'meio'
+                                if (p.includes('meio')) return 'meio'
+                                if (p.includes('ala')) return 'meio'
+                                if (p.includes('meia a')) return 'meio'
+                                if (p.includes('ponta') || p.includes('ponte')) return 'ata'
+                                if (p.includes('pivô') || p.includes('pivo')) return 'ata'
+                                if (p.includes('ata')) return 'ata'
+                                if (p.includes('centroav')) return 'ata'
+                                return 'meio'
+                              }
+
+                              const goalkeepers = combined.filter(player => roleOf(player.position) === 'gol')
+                              if (goalkeepers.length < 2) {
+                                toast({
+                                  title: "Faltam goleiros",
+                                  description: "É necessário ter ao menos 2 goleiros para formar times (1 por time).",
+                                  variant: "destructive",
+                                })
+                                return // Mantém a seleção para o usuário corrigir
+                              }
+
+                              // Se passou na validação, então adiciona os jogadores e gera os times
                               if (newPlayers.length > 0) {
                                 setPlayers(combined)
                                 setSelectedPredefinedPlayers([])
