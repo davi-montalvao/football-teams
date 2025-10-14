@@ -205,18 +205,15 @@ export default function FootballTeams() {
 
   const addPlayer = () => {
     if (newPlayer.name && newPlayer.position && gameType) {
-      const player: Player = {
-        id: Date.now().toString(),
-        name: newPlayer.name,
-        position: newPlayer.position,
-      }
-      // Em vez de cadastrar direto, adiciona à lista de disponíveis
+      const playerId = Date.now().toString()
+
+      // Adiciona à lista de disponíveis
       setPredefined(prev => {
         const next = [
           ...prev,
           {
-            id: player.id,
-            name: player.name,
+            id: playerId,
+            name: newPlayer.name,
             defaultPositions: {
               futsal: positionsByGameType.futsal,
               society: positionsByGameType.society,
@@ -227,6 +224,15 @@ export default function FootballTeams() {
         // mantém em ordem alfabética
         return next.sort((a, b) => a.name.localeCompare(b.name))
       })
+
+      // Salva a posição cadastrada para que seja respeitada
+      setEditedPlayers(prev => ({
+        ...prev,
+        [playerId]: {
+          position: newPlayer.position
+        }
+      }))
+
       setNewPlayer({ name: "", position: "" })
     }
   }
