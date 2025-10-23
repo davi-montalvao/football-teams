@@ -102,6 +102,7 @@ const nameRoleOverrides: Record<string, 'ATA' | 'ZAG' | 'LE' | 'LD' | 'MEIO'> = 
   'Pacheco': 'MEIO',
   'Anisio': 'ZAG',
   'Diógenes': 'ZAG',
+  'Tagavas': 'ATA',
 }
 
 // Converte o papel genérico para a posição por modalidade
