@@ -35,7 +35,7 @@ interface PredefinedPlayer {
 
 const positionsByGameType = {
   futsal: ["Goleiro", "Fixo", "Ala D", "Ala E", "Pivô"],
-  society: ["Gol", "Zag", "Lat D", "Lat E", "Meio", "Ata"],
+  society: ["Gol", "Zag", "Lat D", "Lat E", "Volante", "Ata"],
   campo: [
     "Goleiro",
     "Zagueiro",
@@ -51,14 +51,14 @@ const positionsByGameType = {
 }
 
 const gameTypes = {
-  futsal: { name: "Futsal", playersPerTeam: 5 },
-  society: { name: "Society", playersPerTeam: 8 },
-  campo: { name: "Campo", playersPerTeam: 11 },
+  futsal: { name: "Futsal", playersPerTeam: 5, fixedTeams: true },
+  society: { name: "Society", playersPerTeam: 8, fixedTeams: false },
+  campo: { name: "Campo", playersPerTeam: 11, fixedTeams: true },
 }
 
 const getDefaultPositionForGameType = (gameType: keyof typeof gameTypes | ""): string => {
   if (gameType === "futsal") return "Ala D"
-  if (gameType === "society") return "Meio"
+  if (gameType === "society") return "Volante"
   if (gameType === "campo") return "Meio"
   return "Meio-campo"
 }
@@ -99,7 +99,9 @@ const nameRoleOverrides: Record<string, 'ATA' | 'ZAG' | 'LE' | 'LD' | 'MEIO'> = 
   'Marcelinho': 'ATA',
   'Mariano': 'LD',
   'Michael': 'MEIO',
+  'Pacheco': 'MEIO',
   'Anisio': 'ZAG',
+  'Diógenes': 'ZAG',
 }
 
 // Converte o papel genérico para a posição por modalidade
@@ -126,7 +128,7 @@ const mapRoleToPosition = (gameType: keyof typeof gameTypes | "", role: 'ATA' | 
   }
   if (role === 'MEIO') {
     if (gameType === 'futsal') return 'Ala D'
-    if (gameType === 'society') return 'Meio'
+    if (gameType === 'society') return 'Volante'
     if (gameType === 'campo') return 'Meio'
   }
   return getDefaultPositionForGameType(gameType)
@@ -145,7 +147,6 @@ const getPredefinedBasePosition = (displayName: string, gameType: keyof typeof g
 
   // Lista pré-definida de jogadores (ordem alfabética)
   const initialPredefinedPlayers: PredefinedPlayer[] = [
-    "Bruno",
     "Bruno P",
     "Boka",
     "Carlos",
@@ -175,6 +176,7 @@ const getPredefinedBasePosition = (displayName: string, gameType: keyof typeof g
     "Marcio",
     "Michael",
     "Miquéias",
+    "Pacheco",
     "Peter",
     "Renato R",
     "Ronaldinho",
@@ -206,9 +208,23 @@ export default function FootballTeams() {
   const [editedPlayers, setEditedPlayers] = useState<{[key: string]: {name?: string, position?: string}}>({})
   const [editingPredefinedPositionId, setEditingPredefinedPositionId] = useState<string | null>(null)
 
+  // Configurações para society
+  const [numberOfTeams, setNumberOfTeams] = useState<number>(2)
+  const [playersPerTeam, setPlayersPerTeam] = useState<number>(8)
+  const [societyConfigured, setSocietyConfigured] = useState<boolean>(false)
+
   const isMobile = useIsMobile()
   const { toast } = useToast()
   const teamsSectionRef = useRef<HTMLDivElement | null>(null)
+
+  // Função helper para calcular jogadores necessários
+  const getTotalPlayersNeeded = () => {
+    if (!gameType) return 0
+    if (gameType === 'society') {
+      return numberOfTeams * playersPerTeam
+    }
+    return gameTypes[gameType].playersPerTeam * 2
+  }
 
   const addPlayer = () => {
     if (newPlayer.name && newPlayer.position && gameType) {
@@ -254,6 +270,15 @@ export default function FootballTeams() {
     setTeams([])
     setNewPlayer({ name: "", position: "" })
     setSelectedPredefinedPlayers([])
+
+    // Reset configurações do Society
+    if (value !== 'society') {
+      setSocietyConfigured(true)
+    } else {
+      setSocietyConfigured(false)
+      setNumberOfTeams(2)
+      setPlayersPerTeam(8)
+    }
   }
 
   const addPredefinedPlayers = () => {
@@ -332,8 +357,9 @@ export default function FootballTeams() {
   const generateTeams = async (sourcePlayers?: Player[]) => {
     if (!gameType) return
 
-    const playersPerTeam = gameTypes[gameType].playersPerTeam
-    const totalPlayersNeeded = playersPerTeam * 2
+    const currentPlayersPerTeam = gameType === 'society' ? playersPerTeam : gameTypes[gameType].playersPerTeam
+    const currentNumberOfTeams = gameType === 'society' ? numberOfTeams : 2
+    const totalPlayersNeeded = currentPlayersPerTeam * currentNumberOfTeams
 
     const pool = (sourcePlayers ?? players)
 
@@ -378,15 +404,30 @@ export default function FootballTeams() {
       const groups: Record<'gol' | 'def' | 'meio' | 'ata', Player[]> = { gol: [], def: [], meio: [], ata: [] }
       selected.forEach(player => groups[roleOf(player.position)].push(player))
 
+      // Validação de goleiros - mostra aviso se poucos goleiros
+      const goalkeepersNeeded = currentNumberOfTeams
+      const goalkeepersFound = groups.gol.length
+
+      if (goalkeepersFound < goalkeepersNeeded) {
+        // Usar setTimeout para garantir que o toast aparece após o toast de "Formando Times..."
+        setTimeout(() => {
+          toast({
+            title: "⚠️ Aviso: Poucos goleiros",
+            description: `Encontrados ${goalkeepersFound} goleiro${goalkeepersFound !== 1 ? 's' : ''}, mas são necessários ${goalkeepersNeeded} (1 por time). Times serão gerados mesmo assim.`,
+            variant: "default",
+          })
+        }, 100)
+      }
+
       Object.values(groups).forEach(arr => arr.sort(() => Math.random() - 0.5))
 
-      const team1: Player[] = []
-      const team2: Player[] = []
+      // Criar arrays para todos os times
+      const teams: Player[][] = Array.from({ length: currentNumberOfTeams }, () => [])
 
       // Grupos de separação: evitar que fiquem no mesmo time
       const separationGroups: string[][] = [
-        ['Lucas','Lukinhas','JP','Cassio'],
-        ['Anisio','Mariano'],
+        ['Felipe Augusto', 'JP', 'Lucas', 'Lukinhas', 'Cassio', 'Peter', 'Marcelinho'], // Jogadores muito bons - não podem ficar juntos
+        ['Anisio', 'Mariano', 'Jean'], // Jogadores que precisam ser separados para equilibrar
       ]
       const nameInTeam = (t: Player[], name: string) => t.some(p => stripGloveEmoji(p.name).toLowerCase() === stripGloveEmoji(name).toLowerCase())
       const violatesGroup = (t: Player[], candidateName: string) => {
@@ -395,25 +436,26 @@ export default function FootballTeams() {
 
       const addToTeams = (player: Player) => {
         const name = stripGloveEmoji(player.name)
-        const t1ok = team1.length < playersPerTeam && !violatesGroup(team1, name)
-        const t2ok = team2.length < playersPerTeam && !violatesGroup(team2, name)
-        if (t1ok && t2ok) {
-          // escolhe o menor
-          if (team1.length <= team2.length) team1.push(player)
-          else team2.push(player)
+
+        // Encontrar times válidos (não cheios e sem violação)
+        const validTeams = teams
+          .map((team, index) => ({ team, index }))
+          .filter(({ team }) => team.length < currentPlayersPerTeam && !violatesGroup(team, name))
+
+        if (validTeams.length > 0) {
+          // Escolher o time com menos jogadores
+          const targetTeam = validTeams.reduce((min, current) =>
+            current.team.length < min.team.length ? current : min
+          )
+          targetTeam.team.push(player)
           return
         }
-        if (t1ok) { team1.push(player); return }
-        if (t2ok) { team2.push(player); return }
-        // Se ambos violam, coloca no menor mesmo assim respeitando capacidade
-        if (team1.length < playersPerTeam && team2.length < playersPerTeam) {
-          if (team1.length <= team2.length) team1.push(player)
-          else team2.push(player)
-          return
+
+        // Se nenhum time válido, colocar no primeiro time não cheio
+        const availableTeam = teams.find(team => team.length < currentPlayersPerTeam)
+        if (availableTeam) {
+          availableTeam.push(player)
         }
-        if (team1.length < playersPerTeam) { team1.push(player); return }
-        if (team2.length < playersPerTeam) { team2.push(player); return }
-        // Ambos cheios: ignora quaisquer extras
       }
 
       const distribute = (arr: Player[]) => {
@@ -426,10 +468,16 @@ export default function FootballTeams() {
       distribute(groups.meio)
       distribute(groups.ata)
 
-      const built: Team[] = [
-        { name: "Time Amarelo", players: team1 },
-        { name: "Time Azul", players: team2 },
+      // Nomes dos times
+      const teamNames = [
+        "Time Amarelo", "Time Azul", "Time Verde", "Time Vermelho",
+        "Time Roxo", "Time Laranja", "Time Rosa", "Time Marrom"
       ]
+
+      const built: Team[] = teams.map((teamPlayers, index) => ({
+        name: teamNames[index] || `Time ${index + 1}`,
+        players: teamPlayers
+      }))
       setTeams(built)
       toast({ title: "Times gerados!", description: "Times balanceados por posição com sucesso." })
       setTimeout(() => {
@@ -490,7 +538,80 @@ export default function FootballTeams() {
 
         {gameType && (
           <>
+            {/* Configuração Society */}
+            {gameType === 'society' && !societyConfigured && (
+              <Card className="bg-gray-50/60 dark:bg-gray-900/60 backdrop-blur-md border-gray-200/30 dark:border-gray-700/30 shadow-xl">
+                <CardHeader>
+                  <CardTitle className="text-gray-800 dark:text-gray-100 text-lg sm:text-xl">Configurar Society</CardTitle>
+                  <CardDescription className="text-gray-600 dark:text-gray-300 text-sm sm:text-base">
+                    Configure quantos times e quantos jogadores por time você deseja
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="numberOfTeams" className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
+                        Número de Times
+                      </Label>
+                      <Select
+                        value={numberOfTeams.toString()}
+                        onValueChange={(value) => setNumberOfTeams(parseInt(value))}
+                      >
+                        <SelectTrigger className="bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/40 dark:border-gray-600/40">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-md">
+                          {[2, 3, 4, 5, 6].map((num) => (
+                            <SelectItem key={num} value={num.toString()}>
+                              {num} times
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="playersPerTeam" className="text-gray-700 dark:text-gray-200 text-sm sm:text-base">
+                        Jogadores por Time
+                      </Label>
+                      <Select
+                        value={playersPerTeam.toString()}
+                        onValueChange={(value) => setPlayersPerTeam(parseInt(value))}
+                      >
+                        <SelectTrigger className="bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/40 dark:border-gray-600/40">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-md">
+                          {[5, 6, 7, 8, 9, 10, 11].map((num) => (
+                            <SelectItem key={num} value={num.toString()}>
+                              {num} jogadores
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-blue-50/50 dark:bg-blue-950/20 rounded-lg border border-blue-200/40 dark:border-blue-700/40">
+                    <div>
+                      <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                        Total de jogadores necessários: {numberOfTeams * playersPerTeam}
+                      </p>
+                      <p className="text-xs text-blue-600 dark:text-blue-300">
+                        {numberOfTeams} times × {playersPerTeam} jogadores cada
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() => setSocietyConfigured(true)}
+                      className="bg-gradient-to-r from-emerald-500 to-blue-500 text-white shadow-lg active:from-emerald-600 active:to-blue-600 transition-all duration-200"
+                    >
+                      Confirmar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Jogadores Disponíveis */}
+            {(gameType !== 'society' || societyConfigured) && (
             <Card className="bg-gray-50/60 dark:bg-gray-900/60 backdrop-blur-md border-gray-200/30 dark:border-gray-700/30 shadow-xl">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-gray-800 dark:text-gray-100 text-lg sm:text-xl">
@@ -512,7 +633,7 @@ export default function FootballTeams() {
                           : "border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 hover:border-gray-300 dark:hover:border-gray-600"
                       }`}
                       onClick={() => {
-                        const needed = gameType ? (gameTypes[gameType].playersPerTeam * 2) : 0
+                        const needed = getTotalPlayersNeeded()
                         const missing = Math.max(0, needed - (players.length + selectedPredefinedPlayers.length))
                         if (selectedPredefinedPlayers.includes(player.id)) {
                           setSelectedPredefinedPlayers(selectedPredefinedPlayers.filter(id => id !== player.id))
@@ -561,7 +682,7 @@ export default function FootballTeams() {
                             onClick={(e) => {
                               e.stopPropagation()
                                 if (isMobile) {
-                                  const needed = gameType ? (gameTypes[gameType].playersPerTeam * 2) : 0
+                                  const needed = getTotalPlayersNeeded()
                                   const missing = Math.max(0, needed - (players.length + selectedPredefinedPlayers.length))
                                   if (selectedPredefinedPlayers.includes(player.id)) {
                                     setSelectedPredefinedPlayers(selectedPredefinedPlayers.filter(id => id !== player.id))
@@ -644,7 +765,7 @@ export default function FootballTeams() {
                 <div className="sm:static sticky bottom-0 left-0 right-0 z-10 -mx-4 px-4 py-2 bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur supports-[backdrop-filter]:bg-gray-50/70 border-t border-gray-200/40 dark:border-gray-700/40 space-y-2">
                   <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600 dark:text-gray-300">
                     {(() => {
-                      const needed = gameType ? (gameTypes[gameType].playersPerTeam * 2) : 0
+                      const needed = getTotalPlayersNeeded()
                       const current = Math.min(needed, players.length + selectedPredefinedPlayers.length)
                       return (
                         <>
@@ -679,7 +800,7 @@ export default function FootballTeams() {
                       return null
                     })()}
                     {(() => {
-                      const needed = gameType ? (gameTypes[gameType].playersPerTeam * 2) : 0
+                      const needed = getTotalPlayersNeeded()
                       const missing = Math.max(0, needed - (players.length + selectedPredefinedPlayers.length))
                       if (needed > 0 && missing === 0) {
                         return (
@@ -687,37 +808,6 @@ export default function FootballTeams() {
                             onClick={() => {
                               const newPlayers = buildPlayersFromSelection()
                               const combined = newPlayers.length > 0 ? [...players, ...newPlayers] : players
-
-                              // Validar goleiros antes de limpar seleção
-                              const roleOf = (position: string): 'gol' | 'def' | 'meio' | 'ata' => {
-                                const p = position.toLowerCase()
-                                if (p.includes('gol')) return 'gol'
-                                if (p.includes('goleiro')) return 'gol'
-                                if (p.includes('zag')) return 'def'
-                                if (p.includes('zagueiro')) return 'def'
-                                if (p.includes('lat')) return 'def'
-                                if (p.includes('lateral')) return 'def'
-                                if (p.includes('fixo')) return 'def'
-                                if (p.includes('volante')) return 'meio'
-                                if (p.includes('meio')) return 'meio'
-                                if (p.includes('ala')) return 'meio'
-                                if (p.includes('meia a')) return 'meio'
-                                if (p.includes('ponta') || p.includes('ponte')) return 'ata'
-                                if (p.includes('pivô') || p.includes('pivo')) return 'ata'
-                                if (p.includes('ata')) return 'ata'
-                                if (p.includes('centroav')) return 'ata'
-                                return 'meio'
-                              }
-
-                              const goalkeepers = combined.filter(player => roleOf(player.position) === 'gol')
-                              if (goalkeepers.length < 2) {
-                                toast({
-                                  title: "Faltam goleiros",
-                                  description: "É necessário ter ao menos 2 goleiros para formar times (1 por time).",
-                                  variant: "destructive",
-                                })
-                                return // Mantém a seleção para o usuário corrigir
-                              }
 
                               // Se passou na validação, então adiciona os jogadores e gera os times
                               if (newPlayers.length > 0) {
@@ -752,7 +842,7 @@ export default function FootballTeams() {
                       onClick={() => setSelectedPredefinedPlayers([])}
                         className="text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={isLoading || (() => {
-                          const needed = gameType ? (gameTypes[gameType].playersPerTeam * 2) : 0
+                          const needed = getTotalPlayersNeeded()
                           const missing = Math.max(0, needed - (players.length + selectedPredefinedPlayers.length))
                           return needed > 0 && missing === 0
                         })()}
@@ -764,13 +854,15 @@ export default function FootballTeams() {
                 </div>
               </CardContent>
             </Card>
+            )}
 
             {/* Cadastrar Novo Jogador */}
+            {(gameType !== 'society' || societyConfigured) && (
             <Card className="bg-gray-50/60 dark:bg-gray-900/60 backdrop-blur-md border-gray-200/30 dark:border-gray-700/30 shadow-xl">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-gray-800 dark:text-gray-100 text-lg sm:text-xl">
                   <Plus className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-500" />
-                  Cadastrar Novo Jogador - {gameTypes[gameType].name}
+                  Cadastrar Novo Jogador - {gameType === 'society' ? `Society (${numberOfTeams} times, ${playersPerTeam} jogadores cada)` : gameTypes[gameType].name}
                 </CardTitle>
                 <CardDescription className="text-gray-600 dark:text-gray-300 text-sm sm:text-base">
                   Adicione um jogador personalizado informando nome e posição
@@ -821,6 +913,7 @@ export default function FootballTeams() {
               </div>
             </CardContent>
           </Card>
+            )}
 
         {/* Removido Jogadores Cadastrados: fluxo passa por Disponíveis */}
 
@@ -866,22 +959,29 @@ export default function FootballTeams() {
 
         {/* Times Gerados */}
         {teams.length > 0 && !isLoading && (
-          <div ref={teamsSectionRef} className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-            {teams.map((team, index) => (
+          <div ref={teamsSectionRef} className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+            {teams.map((team, index) => {
+              const teamColors = [
+                { bg: "bg-yellow-50/70 dark:bg-yellow-900/20", border: "border-yellow-300/60 dark:border-yellow-500/40", badge: "bg-yellow-400", ring: "ring-yellow-200 dark:ring-yellow-700/50" },
+                { bg: "bg-blue-50/70 dark:bg-blue-900/20", border: "border-blue-300/60 dark:border-blue-500/40", badge: "bg-blue-500", ring: "ring-blue-200 dark:ring-blue-700/50" },
+                { bg: "bg-green-50/70 dark:bg-green-900/20", border: "border-green-300/60 dark:border-green-500/40", badge: "bg-green-500", ring: "ring-green-200 dark:ring-green-700/50" },
+                { bg: "bg-red-50/70 dark:bg-red-900/20", border: "border-red-300/60 dark:border-red-500/40", badge: "bg-red-500", ring: "ring-red-200 dark:ring-red-700/50" },
+                { bg: "bg-purple-50/70 dark:bg-purple-900/20", border: "border-purple-300/60 dark:border-purple-500/40", badge: "bg-purple-500", ring: "ring-purple-200 dark:ring-purple-700/50" },
+                { bg: "bg-orange-50/70 dark:bg-orange-900/20", border: "border-orange-300/60 dark:border-orange-500/40", badge: "bg-orange-500", ring: "ring-orange-200 dark:ring-orange-700/50" }
+              ]
+              const colors = teamColors[index % teamColors.length]
+
+              return (
               <Card
                 key={index}
-                className={`backdrop-blur-md border-2 shadow-xl ${
-                  index === 0
-                    ? "bg-yellow-50/70 dark:bg-yellow-900/20 border-yellow-300/60 dark:border-yellow-500/40"
-                    : "bg-blue-50/70 dark:bg-blue-900/20 border-blue-300/60 dark:border-blue-500/40"
-                }`}
+                className={`backdrop-blur-md border-2 shadow-xl ${colors.bg} ${colors.border}`}
               >
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between text-gray-800 dark:text-gray-100 text-lg sm:text-xl">
                     <span className="truncate flex items-center gap-2">
-                      <span className={`${index === 0 ? 'bg-yellow-400' : 'bg-blue-500'} inline-block w-3 h-3 rounded-full ring-2 ${index === 0 ? 'ring-yellow-200 dark:ring-yellow-700/50' : 'ring-blue-200 dark:ring-blue-700/50'}`}></span>
+                      <span className={`${colors.badge} inline-block w-3 h-3 rounded-full ring-2 ${colors.ring}`}></span>
                       {team.name}
-                      <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">{team.players.length}/{gameTypes[gameType].playersPerTeam}</span>
+                      <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">{team.players.length}/{gameType === 'society' ? playersPerTeam : gameTypes[gameType].playersPerTeam}</span>
                     </span>
 
                   </CardTitle>
@@ -917,9 +1017,10 @@ export default function FootballTeams() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+              )
+            })}
           </div>
-            )}
+        )}
           </>
         )}
       </div>
