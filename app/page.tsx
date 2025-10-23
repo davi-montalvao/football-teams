@@ -428,7 +428,7 @@ export default function FootballTeams() {
       // Grupos de separação: evitar que fiquem no mesmo time
       const separationGroups: string[][] = [
         ['Felipe Augusto', 'JP', 'Lucas', 'Lukinhas', 'Cassio', 'Peter', 'Marcelinho'], // Jogadores muito bons - não podem ficar juntos
-        ['Anisio', 'Mariano', 'Jean'], // Jogadores que precisam ser separados para equilibrar
+        ['Anisio', 'Mariano', 'Jean', 'Tagavas', 'Ley'], // Jogadores que precisam ser separados para equilibrar
       ]
       const nameInTeam = (t: Player[], name: string) => t.some(p => stripGloveEmoji(p.name).toLowerCase() === stripGloveEmoji(name).toLowerCase())
       const violatesGroup = (t: Player[], candidateName: string) => {
