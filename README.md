@@ -29,7 +29,7 @@ O **Formador de Times** é uma aplicação web moderna e intuitiva que permite a
 ### 🎮 Modalidades Suportadas
 
 - **⚽ Futsal**: 5 jogadores por time
-- **🏟️ Society**: 7 jogadores por time
+- **🏟️ Society**: 8 jogadores por time
 - **🌍 Campo**: 11 jogadores por time
 
 ## ✨ Funcionalidades
