@@ -35,7 +35,7 @@ interface PredefinedPlayer {
 
 const positionsByGameType = {
   futsal: ["Goleiro", "Fixo", "Ala D", "Ala E", "Pivô"],
-  society: ["Gol", "Zag", "Lat D", "Lat E", "Volante", "Ata"],
+  society: ["Gol", "Zag", "Lat D", "Lat E", "Volante", "Meia", "Ata"],
   campo: [
     "Goleiro",
     "Zagueiro",
@@ -85,6 +85,7 @@ const nameRoleOverrides: Record<string, 'ATA' | 'ZAG' | 'LE' | 'LD' | 'MEIO'> = 
   'Guiomar': 'ZAG',
   'Jean': 'LE',
   'Davi': 'LE',
+  'Denis': 'ZAG',
   'Lucas': 'ATA',
   'Lukinhas': 'ATA',
   'Wedson': 'ZAG',
@@ -108,6 +109,10 @@ const nameRoleOverrides: Record<string, 'ATA' | 'ZAG' | 'LE' | 'LD' | 'MEIO'> = 
   'Leandro Adão': 'ZAG',
   'Clayton': 'MEIO',
   'Zoio': 'ATA',
+  'Renato R': 'MEIO',
+  'Jhow': 'MEIO',
+  'Fetch': 'MEIO',
+  'Fabinho Magrelo': 'MEIO',
 }
 
 // Converte o papel genérico para a posição por modalidade
@@ -134,7 +139,7 @@ const mapRoleToPosition = (gameType: keyof typeof gameTypes | "", role: 'ATA' | 
   }
   if (role === 'MEIO') {
     if (gameType === 'futsal') return 'Ala D'
-    if (gameType === 'society') return 'Volante'
+    if (gameType === 'society') return 'Meia'
     if (gameType === 'campo') return 'Meio'
   }
   return getDefaultPositionForGameType(gameType)
@@ -158,17 +163,21 @@ const getPredefinedBasePosition = (displayName: string, gameType: keyof typeof g
     "Carlos",
     "Cassio",
     "Clayton",
+    "Denis",
     "Davi",
     "Daniel",
     "Anisio",
     "Diógenes",
     "Eduardo",
     "Fabio Sanches",
+    "Fabinho Magrelo",
     "Felipe Augusto",
+    "Fetch",
     "Gaúcho",
     "Guiomar",
     "JP",
     "Jean",
+    "Jhow",
     "Joaquim 🧤",
     "Jota",
     "Kleber 🧤",
@@ -239,15 +248,36 @@ export default function FootballTeams() {
 
   const addPlayer = () => {
     if (newPlayer.name && newPlayer.position && gameType) {
+      const nameTrimmed = newPlayer.name.trim()
+      const normalized = nameTrimmed.replace('🧤', '').replace(' 🧤', '').trim().toLowerCase()
+
+      // Verifica duplicatas na lista pré-definida e nos jogadores já adicionados
+      const existsInPredefined = predefined.some(p => p.name.replace('🧤', '').replace(' 🧤', '').trim().toLowerCase() === normalized)
+      const existsInPlayers = players.some(p => p.name.replace('🧤', '').replace(' 🧤', '').trim().toLowerCase() === normalized)
+      if (existsInPredefined || existsInPlayers) {
+        toast({
+          title: "Nome já existe",
+          description: `O jogador "${nameTrimmed}" já está cadastrado. Escolha outro nome.`,
+          variant: "destructive",
+        })
+        return
+      }
+
       const playerId = Date.now().toString()
 
       // Adiciona à lista de disponíveis
       setPredefined(prev => {
+        // se a posição selecionada for goleiro, garantir emoji no nome
+        const goalieLabel = getGoalkeeperPositionLabel(gameType)
+        const finalNameWithEmoji = (newPlayer.position === goalieLabel || (newPlayer.position.toLowerCase && newPlayer.position.toLowerCase().includes('gol')))
+          ? (nameTrimmed.includes('🧤') ? nameTrimmed : `${nameTrimmed} 🧤`)
+          : nameTrimmed.replace(' 🧤','').replace('🧤','').trim()
+
         const next = [
           ...prev,
           {
             id: playerId,
-            name: newPlayer.name,
+            name: finalNameWithEmoji,
             defaultPositions: {
               futsal: positionsByGameType.futsal,
               society: positionsByGameType.society,
@@ -439,45 +469,79 @@ export default function FootballTeams() {
       const separationGroups: string[][] = [
         ['Felipe Augusto', 'JP', 'Lucas', 'Lukinhas', 'Cassio', 'Peter', 'Marcelinho'], // Jogadores muito bons - não podem ficar juntos
         ['Anisio', 'Mariano', 'Jean', 'Tagavas', 'Ley'], // Jogadores que precisam ser separados para equilibrar
+        ['Tagavas', 'Ley'], // Par específico: Tagavas e Ley não podem ficar no mesmo time (mais velhos)
       ]
       const nameInTeam = (t: Player[], name: string) => t.some(p => stripGloveEmoji(p.name).toLowerCase() === stripGloveEmoji(name).toLowerCase())
       const violatesGroup = (t: Player[], candidateName: string) => {
         return separationGroups.some(group => group.includes(stripGloveEmoji(candidateName)) && group.some(member => nameInTeam(t, member)))
       }
 
-      const addToTeams = (player: Player) => {
-        const name = stripGloveEmoji(player.name)
+      // Ordem desejada por vaga no time (will be repeated if playersPerTeam > length)
+      const orderedSlotRoles: ('gol' | 'def' | 'meio' | 'ata')[] = [
+        'gol', // Goleiro
+        'def', // Zagueiro
+        'def', // Zagueiro
+        'def', // Lateral Direito
+        'def', // Lateral Esquerdo
+        'meio', // Volante
+        'meio', // Meia
+        'meio', // Meia
+        'ata', // Atacante
+      ]
 
-        // Encontrar times válidos (não cheios e sem violação)
-        const validTeams = teams
-          .map((team, index) => ({ team, index }))
-          .filter(({ team }) => team.length < currentPlayersPerTeam && !violatesGroup(team, name))
-
-        if (validTeams.length > 0) {
-          // Escolher o time com menos jogadores
-          const targetTeam = validTeams.reduce((min, current) =>
-            current.team.length < min.team.length ? current : min
-          )
-          targetTeam.team.push(player)
-          return
+      // Função para encontrar candidato em um grupo que não viole regras
+      const findCandidateIndex = (group: Player[], team: Player[]) => {
+        for (let i = 0; i < group.length; i++) {
+          const candidate = group[i]
+          if (!violatesGroup(team, candidate.name)) return i
         }
+        return -1
+      }
 
-        // Se nenhum time válido, colocar no primeiro time não cheio
-        const availableTeam = teams.find(team => team.length < currentPlayersPerTeam)
-        if (availableTeam) {
-          availableTeam.push(player)
+      const teamSlots = currentPlayersPerTeam
+      // Construir sequência de slots até o número de jogadores por time (repete o padrão se necessário)
+      const slots: ('gol'|'def'|'meio'|'ata')[] = Array.from({ length: teamSlots }, (_, i) => orderedSlotRoles[i % orderedSlotRoles.length])
+
+      // Para cada slot da estrutura, tente dar 1 jogador daquela categoria para cada time, na ordem dos times
+      for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
+        const roleKey = slots[slotIndex]
+        for (let t = 0; t < teams.length; t++) {
+          const team = teams[t]
+          if (team.length >= teamSlots) continue
+
+          const group = groups[roleKey]
+          if (!group || group.length === 0) continue
+
+          const candidateIdx = findCandidateIndex(group, team)
+          if (candidateIdx !== -1) {
+            const [player] = group.splice(candidateIdx, 1)
+            team.push(player)
+          }
         }
       }
 
-      const distribute = (arr: Player[]) => {
-        arr.forEach((player) => addToTeams(player))
-      }
+      // Preencher vagas restantes com qualquer jogador disponível (sem considerar posição), respeitando separação
+      const remainingPlayers = [...groups.gol, ...groups.def, ...groups.meio, ...groups.ata]
+      // esvazia os grupos since we copied
+      groups.gol.length = 0; groups.def.length = 0; groups.meio.length = 0; groups.ata.length = 0
 
-      // garante goleiros equilibrados primeiro, depois demais posições
-      distribute(groups.gol)
-      distribute(groups.def)
-      distribute(groups.meio)
-      distribute(groups.ata)
+      // tentar preencher por time, escolhendo candidatos que não violem
+      for (let t = 0; t < teams.length; t++) {
+        const team = teams[t]
+        while (team.length < teamSlots && remainingPlayers.length > 0) {
+          // encontrar índice de candidato que não viole
+          let idx = -1
+          for (let i = 0; i < remainingPlayers.length; i++) {
+            if (!violatesGroup(team, remainingPlayers[i].name)) { idx = i; break }
+          }
+          if (idx === -1) {
+            // se não existe candidato que não viole, use o primeiro disponível
+            idx = 0
+          }
+          const [player] = remainingPlayers.splice(idx, 1)
+          team.push(player)
+        }
+      }
 
       // Nomes dos times
       const teamNames = [
@@ -726,10 +790,22 @@ export default function FootballTeams() {
                                 }}
                                 value={editedPlayers[player.id]?.position || getPredefinedBasePosition(getEditedValue(player.id, 'name', player.name), gameType)}
                                 onValueChange={(value) => {
-                                  setEditedPlayers(prev => ({
-                              ...prev,
-                                    [player.id]: { ...prev[player.id], position: value }
-                                  }))
+                                  setEditedPlayers(prev => {
+                                    const prevEntry = prev[player.id] || {}
+                                    const currentName = prevEntry.name ?? player.name
+                                    const goalieLabel = getGoalkeeperPositionLabel(gameType)
+                                    let newName = currentName
+                                    const hasEmoji = newName.includes('🧤')
+                                    if (value === goalieLabel) {
+                                      if (!hasEmoji) newName = `${newName} 🧤`
+                                    } else {
+                                      if (hasEmoji) newName = newName.replace(' 🧤','').replace('🧤','').trim()
+                                    }
+                                    return {
+                                      ...prev,
+                                      [player.id]: { ...prev[player.id], position: value, name: newName }
+                                    }
+                                  })
                                   setEditingPredefinedPositionId(null)
                                 }}
                               >
@@ -794,7 +870,7 @@ export default function FootballTeams() {
 
                 <div className="flex flex-col sm:flex-row gap-3">
                     {(() => {
-                      const needed = gameType ? (gameTypes[gameType].playersPerTeam * 2) : 0
+                      const needed = getTotalPlayersNeeded()
                       const missing = Math.max(0, needed - (players.length + selectedPredefinedPlayers.length))
                       if (needed > 0 && missing > 0) {
                         return (
