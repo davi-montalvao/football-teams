@@ -97,11 +97,17 @@ const nameRoleOverrides: Record<string, 'ATA' | 'ZAG' | 'LE' | 'LD' | 'MEIO'> = 
   'Leopoldo': 'ZAG',
   'Ley': 'ATA',
   'Marcelinho': 'ATA',
+  'Alex': 'ATA',
+  'Lucas Oliv': 'ATA',
+  'Marcão': 'ATA',
   'Mariano': 'LD',
   'Michael': 'MEIO',
   'Pacheco': 'MEIO',
   'Anisio': 'ZAG',
   'Diógenes': 'ZAG',
+  'Lucio': 'ZAG',
+  'Emerson': 'ZAG',
+  'Fernandinho': 'LE',
   'Tagavas': 'ATA',
   'Magalhães': 'LE',
   'Léo': 'ZAG',
@@ -111,8 +117,8 @@ const nameRoleOverrides: Record<string, 'ATA' | 'ZAG' | 'LE' | 'LD' | 'MEIO'> = 
   'Zoio': 'ATA',
   'Renato R': 'MEIO',
   'Jhow': 'MEIO',
-  'Fetch': 'MEIO',
-  'Fabinho Magrelo': 'MEIO',
+  'Feth': 'MEIO',
+  'Fabio calça': 'MEIO',
 }
 
 // Converte o papel genérico para a posição por modalidade
@@ -167,26 +173,35 @@ const getPredefinedBasePosition = (displayName: string, gameType: keyof typeof g
     "Davi",
     "Daniel",
     "Anisio",
+    "André MM👟",
     "Diógenes",
     "Eduardo",
     "Fabio Sanches",
-    "Fabinho Magrelo",
+    "Fabio calça",
     "Felipe Augusto",
-    "Fetch",
+    "Feth",
     "Gaúcho",
     "Guiomar",
     "JP",
     "Jean",
     "Jhow",
-    "Joaquim 🧤",
+    "Joaquim🧤",
     "Jota",
-    "Kleber 🧤",
+    "Kleber🧤",
     "Klebinho",
+    "Koreia 🈳",
+    "Alex",
+    "Fernandinho",
+    "Lucas Oliv",
+    "Lucio",
+    "Marcão",
+    "Ket",
     "Leandro Adão",
     "Leopoldo",
     "Léo",
     "Ley",
     "Lopes",
+    "Emerson 💼",
     "Lucas",
     "Lukinhas",
     "Magalhães",
@@ -197,12 +212,12 @@ const getPredefinedBasePosition = (displayName: string, gameType: keyof typeof g
     "Miquéias",
     "Pacheco",
     "Peter",
-    "Renato R",
-    "Ronaldinho",
+    "Renato📹",
+    "Ronaldinh🍷",
     "Tagavas",
     "Vinicius",
     "Wedson",
-    "Zoio",
+    "Zoio👀",
   ].sort((a, b) => a.localeCompare(b)).map((name, index) => ({
     id: String(index + 1),
     name,
@@ -212,6 +227,15 @@ const getPredefinedBasePosition = (displayName: string, gameType: keyof typeof g
       campo: positionsByGameType.campo,
     },
   }))
+
+// Posições pré-definidas específicas (ex.: Koreia como Volante)
+const initialEditedPlayers: {[key: string]: {position?: string}} = {}
+const _kore = initialPredefinedPlayers.find(p => stripGloveEmoji(p.name).toLowerCase() === 'koreia')
+if (_kore) initialEditedPlayers[_kore.id] = { position: 'Volante' }
+const _andre = initialPredefinedPlayers.find(p => stripGloveEmoji(p.name).toLowerCase() === 'andré mm')
+if (_andre) initialEditedPlayers[_andre.id] = { position: 'Volante' }
+const _ket = initialPredefinedPlayers.find(p => stripGloveEmoji(p.name).toLowerCase() === 'ket')
+if (_ket) initialEditedPlayers[_ket.id] = { position: 'Volante' }
 
 export default function FootballTeams() {
   const [players, setPlayers] = useState<Player[]>([])
@@ -225,7 +249,7 @@ export default function FootballTeams() {
   const [isLoading, setIsLoading] = useState(false)
   const [selectedPredefinedPlayers, setSelectedPredefinedPlayers] = useState<string[]>([])
   const [editingPlayer, setEditingPlayer] = useState<{id: string, field: 'name'} | null>(null)
-  const [editedPlayers, setEditedPlayers] = useState<{[key: string]: {name?: string, position?: string}}>({})
+  const [editedPlayers, setEditedPlayers] = useState<{[key: string]: {name?: string, position?: string}}>(() => initialEditedPlayers)
   const [editingPredefinedPositionId, setEditingPredefinedPositionId] = useState<string | null>(null)
 
   // Configurações para society
@@ -465,12 +489,8 @@ export default function FootballTeams() {
       // Criar arrays para todos os times
       const teams: Player[][] = Array.from({ length: currentNumberOfTeams }, () => [])
 
-      // Grupos de separação: evitar que fiquem no mesmo time
-      const separationGroups: string[][] = [
-        ['Felipe Augusto', 'JP', 'Lucas', 'Lukinhas', 'Cassio', 'Peter', 'Marcelinho'], // Jogadores muito bons - não podem ficar juntos
-        ['Anisio', 'Mariano', 'Jean', 'Tagavas', 'Ley'], // Jogadores que precisam ser separados para equilibrar
-        ['Tagavas', 'Ley'], // Par específico: Tagavas e Ley não podem ficar no mesmo time (mais velhos)
-      ]
+      // separationGroups removido: agora qualquer jogador pode jogar com qualquer outro
+      const separationGroups: string[][] = []
       const nameInTeam = (t: Player[], name: string) => t.some(p => stripGloveEmoji(p.name).toLowerCase() === stripGloveEmoji(name).toLowerCase())
       const violatesGroup = (t: Player[], candidateName: string) => {
         return separationGroups.some(group => group.includes(stripGloveEmoji(candidateName)) && group.some(member => nameInTeam(t, member)))
@@ -490,57 +510,346 @@ export default function FootballTeams() {
       ]
 
       // Função para encontrar candidato em um grupo que não viole regras
-      const findCandidateIndex = (group: Player[], team: Player[]) => {
-        for (let i = 0; i < group.length; i++) {
-          const candidate = group[i]
-          if (!violatesGroup(team, candidate.name)) return i
+      // Prioriza tipos conforme solicitado: ataque -> meia -> volante -> zagueiro -> laterais
+      const findCandidateIndex = (group: Player[], team: Player[], roleKey: 'gol' | 'def' | 'meio' | 'ata') => {
+        const candidateMatches = (p: Player, check: (p: Player) => boolean) => check(p) && !violatesGroup(team, p.name)
+
+        // helpers to detect sub-positions from position label
+        const pos = (p: Player) => p.position.toLowerCase()
+        const isAttacker = (p: Player) => pos(p).includes('ata') || pos(p).includes('piv') || pos(p).includes('centroav') || pos(p).includes('ponto')
+        const isMeia = (p: Player) => pos(p).includes('meia') && !pos(p).includes('meia a') || pos(p).includes('meio')
+        const isVolante = (p: Player) => pos(p).includes('volante')
+        const isZagueiro = (p: Player) => pos(p).includes('zag') || pos(p).includes('zagueiro') || pos(p).includes('fixo')
+        const isLateral = (p: Player) => pos(p).includes('lat') || pos(p).includes('ponte')
+
+        // preferências por roleKey (listas de checks em ordem)
+        let checks: Array<(p: Player) => boolean> = []
+        if (roleKey === 'ata') {
+          // prefira atacantes que fazem parte do grupo de "bons" (primeiro separationGroups)
+          checks = [
+            (p) => isAttacker(p) && separationGroups[0]?.includes(stripGloveEmoji(p.name)),
+            (p) => isAttacker(p),
+            (p) => true,
+          ]
+        } else if (roleKey === 'meio') {
+          // meia antes de volante
+          checks = [
+            (p) => isMeia(p),
+            (p) => isVolante(p),
+            (p) => roleOf(p.position) === 'meio',
+            (p) => true,
+          ]
+        } else if (roleKey === 'def') {
+          // zagueiro antes de lateral
+          checks = [
+            (p) => isZagueiro(p),
+            (p) => isLateral(p),
+            (p) => roleOf(p.position) === 'def',
+            (p) => true,
+          ]
+        } else {
+          checks = [(p) => roleOf(p.position) === 'gol', (p) => true]
+        }
+
+        for (const check of checks) {
+          for (let i = 0; i < group.length; i++) {
+            const candidate = group[i]
+            if (candidateMatches(candidate, check)) return i
+          }
         }
         return -1
       }
 
       const teamSlots = currentPlayersPerTeam
-      // Construir sequência de slots até o número de jogadores por time (repete o padrão se necessário)
-      const slots: ('gol'|'def'|'meio'|'ata')[] = Array.from({ length: teamSlots }, (_, i) => orderedSlotRoles[i % orderedSlotRoles.length])
 
-      // Para cada slot da estrutura, tente dar 1 jogador daquela categoria para cada time, na ordem dos times
-      for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
-        const roleKey = slots[slotIndex]
-        for (let t = 0; t < teams.length; t++) {
-          const team = teams[t]
-          if (team.length >= teamSlots) continue
+      // helpers para detectar sub-positions
+      const posOf = (p: Player) => p.position.toLowerCase()
+      const isAttacker = (p: Player) => posOf(p).includes('ata') || posOf(p).includes('piv') || posOf(p).includes('centroav') || posOf(p).includes('ponto') || posOf(p).includes('ponta')
+      const isMeia = (p: Player) => posOf(p).includes('meia') && !posOf(p).includes('meia a') || posOf(p).includes('meio')
+      const isVolante = (p: Player) => posOf(p).includes('volante')
+      const isZagueiro = (p: Player) => posOf(p).includes('zag') || posOf(p).includes('zagueiro') || posOf(p).includes('fixo')
+      const isLateral = (p: Player) => posOf(p).includes('lat') || posOf(p).includes('ponte') || posOf(p).includes('lateral')
 
-          const group = groups[roleKey]
-          if (!group || group.length === 0) continue
+      // pick index by ordered checks
+      const pickIndexByChecks = (pool: Player[], team: Player[], checks: Array<(p: Player) => boolean>) => {
+        for (const check of checks) {
+          for (let i = 0; i < pool.length; i++) {
+            const p = pool[i]
+            if (check(p) && !violatesGroup(team, p.name)) return i
+          }
+        }
+        return -1
+      }
 
-          const candidateIdx = findCandidateIndex(group, team)
-          if (candidateIdx !== -1) {
-            const [player] = group.splice(candidateIdx, 1)
-            team.push(player)
+      // Distribuir jogadores por prioridade de posição para evitar concentração
+      const distributeRole = (roleKey: string) => {
+        let pool: Player[] = []
+        if (roleKey === 'ata') pool = groups.ata
+        else if (roleKey === 'gol') pool = groups.gol
+        else if (roleKey === 'meia' || roleKey === 'volante') pool = groups.meio
+        else pool = groups.def
+
+        if (!pool || pool.length === 0) return
+
+        let checks: Array<(p: Player) => boolean> = []
+        if (roleKey === 'ata') {
+          checks = [ (p) => isAttacker(p) && separationGroups[0]?.includes(stripGloveEmoji(p.name)), isAttacker, () => true ]
+        } else if (roleKey === 'meia') {
+          checks = [ isMeia, isVolante, (p) => roleOf(p.position) === 'meio', () => true ]
+        } else if (roleKey === 'volante') {
+          checks = [ isVolante, isMeia, (p) => roleOf(p.position) === 'meio', () => true ]
+        } else if (roleKey === 'zagueiro') {
+          checks = [ isZagueiro, isLateral, (p) => roleOf(p.position) === 'def', () => true ]
+        } else if (roleKey === 'lateral') {
+          checks = [ isLateral, isZagueiro, (p) => roleOf(p.position) === 'def', () => true ]
+        } else if (roleKey === 'gol') {
+          checks = [ (p) => roleOf(p.position) === 'gol', () => true ]
+        }
+
+        let placed = true
+        while (placed) {
+          placed = false
+          for (let t = 0; t < teams.length; t++) {
+            const team = teams[t]
+            if (team.length >= teamSlots) continue
+            const idx = pickIndexByChecks(pool, team, checks)
+            if (idx !== -1) {
+              const [player] = pool.splice(idx, 1)
+              team.push(player)
+              placed = true
+            }
           }
         }
       }
 
-      // Preencher vagas restantes com qualquer jogador disponível (sem considerar posição), respeitando separação
+      // Ordem de distribuição por prioridade solicitada
+      const distributionOrder = ['ata', 'meia', 'volante', 'zagueiro', 'lateral', 'gol']
+      for (const roleKey of distributionOrder) distributeRole(roleKey)
+
+      // Após distribuição prioritária, preencher eventuais vagas restantes com heurística anterior
       const remainingPlayers = [...groups.gol, ...groups.def, ...groups.meio, ...groups.ata]
-      // esvazia os grupos since we copied
       groups.gol.length = 0; groups.def.length = 0; groups.meio.length = 0; groups.ata.length = 0
 
-      // tentar preencher por time, escolhendo candidatos que não violem
+      // calcular distribuição desejada a partir dos orderedSlotRoles (mesmo comportamento anterior)
+      const slots: ('gol'|'def'|'meio'|'ata')[] = Array.from({ length: teamSlots }, (_, i) => orderedSlotRoles[i % orderedSlotRoles.length])
+      const desiredCounts: Record<'gol'|'def'|'meio'|'ata', number> = { gol: 0, def: 0, meio: 0, ata: 0 }
+      for (let i = 0; i < teamSlots; i++) {
+        const s = slots[i % slots.length]
+        desiredCounts[s] = (desiredCounts[s] || 0) + 1
+      }
+
+      const currentCounts = (team: Player[]) => {
+        const c: Record<'gol'|'def'|'meio'|'ata', number> = { gol: 0, def: 0, meio: 0, ata: 0 }
+        for (const p of team) c[roleOf(p.position)] = (c[roleOf(p.position)] || 0) + 1
+        return c
+      }
+
+      const pickBestRemainingIndex = (team: Player[], pool: Player[]) => {
+        const teamCount = currentCounts(team)
+        let bestIdx = -1
+        let bestScore = -Infinity
+        const roleCaps: Record<'gol'|'def'|'meio'|'ata', number> = {
+          gol: Math.max(1, desiredCounts.gol || 1),
+          def: (desiredCounts.def || 0) + 1,
+          meio: (desiredCounts.meio || 0) + 1,
+          ata: Math.max(1, Math.ceil(teamSlots / 4)),
+        }
+
+        for (let i = 0; i < pool.length; i++) {
+          const p = pool[i]
+          if (violatesGroup(team, p.name)) continue
+          const r = roleOf(p.position)
+          const need = (desiredCounts[r] || 0) - (teamCount[r] || 0)
+          let score = need
+          if ((teamCount[r] || 0) >= (roleCaps[r] || 0)) score -= 5
+          if (r === 'ata') score -= Math.max(0, (teamCount.ata || 0) - Math.ceil(teamSlots / 4)) * 0.5
+          if (r === 'ata' && separationGroups[0]?.includes(stripGloveEmoji(p.name))) score += 0.3
+
+          if (score > bestScore) {
+            bestScore = score
+            bestIdx = i
+          }
+        }
+
+        if (bestIdx !== -1) return bestIdx
+        for (let i = 0; i < pool.length; i++) if (!violatesGroup(team, pool[i].name)) return i
+        return 0
+      }
+
       for (let t = 0; t < teams.length; t++) {
         const team = teams[t]
         while (team.length < teamSlots && remainingPlayers.length > 0) {
-          // encontrar índice de candidato que não viole
-          let idx = -1
-          for (let i = 0; i < remainingPlayers.length; i++) {
-            if (!violatesGroup(team, remainingPlayers[i].name)) { idx = i; break }
-          }
-          if (idx === -1) {
-            // se não existe candidato que não viole, use o primeiro disponível
-            idx = 0
-          }
+          const idx = pickBestRemainingIndex(team, remainingPlayers)
           const [player] = remainingPlayers.splice(idx, 1)
           team.push(player)
         }
+      }
+
+      // --- Redistribuição por posição para equilibrar números exatos por time ---
+      // Funções auxiliares para sub-roles
+      const getSubRole = (p: Player) => {
+        const label = p.position.toLowerCase()
+        if (label.includes('gol') || label.includes('goleiro')) return 'gol'
+        if (label.includes('zag') || label.includes('zagueiro') || label.includes('fixo')) return 'zag'
+        if (label.includes('lat') || label.includes('ponte') || label.includes('lateral')) return 'lat'
+        if (label.includes('volante')) return 'vol'
+        if ((label.includes('meia') && !label.includes('meia a')) || label.includes('meio')) return 'meio'
+        if (label.includes('piv') || label.includes('centroav') || label.includes('ata') || label.includes('ponta') || label.includes('ponto')) return 'ata'
+        return 'meio'
+      }
+
+      const collectAndRemove = (predicate: (p: Player) => boolean) => {
+        const pool: Player[] = []
+        for (const team of teams) {
+          for (let i = team.length - 1; i >= 0; i--) {
+            if (predicate(team[i])) {
+              pool.push(...team.splice(i, 1))
+            }
+          }
+        }
+        return pool
+      }
+
+      const distributeEvenly = (pool: Player[], preferBy?: (team: Player[]) => number) => {
+        const total = pool.length
+        if (total === 0) return
+        const base = Math.floor(total / teams.length)
+        let remainder = total % teams.length
+
+        // targets por time
+        const targets = teams.map((_, idx) => base + (remainder > 0 ? 1 : 0))
+        if (remainder > 0) remainder--
+
+        // se preferBy fornecido, ordena equipes por preferencia para receber +1 primeiro
+        const teamOrder = teams.map((team, idx) => ({ idx, score: preferBy ? preferBy(team) : 0 }))
+        if (preferBy) teamOrder.sort((a, b) => b.score - a.score)
+
+        // construir fila de alocação por índice de time
+        const allocationOrder: number[] = []
+        // first allocate one to each team in round-robin respecting targets
+        for (const t of teamOrder) allocationOrder.push(t.idx)
+
+        // agora atribuir players tentando respeitar separationGroups
+        while (pool.length > 0) {
+          // encontrar time com ainda espaço (prioriza teams with less than target)
+          let chosenTeamIdx = -1
+          for (let i = 0; i < teams.length; i++) {
+            const ti = allocationOrder[i % allocationOrder.length]
+            if (teams[ti].length < teamSlots && (teams[ti].filter(p => pool.some(x => x.id === p.id)).length < targets[ti] || teams[ti].length < targets[ti])) {
+              chosenTeamIdx = ti
+              break
+            }
+          }
+          if (chosenTeamIdx === -1) {
+            // fallback: achar qualquer time com espaço
+            chosenTeamIdx = teams.findIndex(t => t.length < teamSlots)
+            if (chosenTeamIdx === -1) chosenTeamIdx = 0
+          }
+
+          // selecionar jogador do pool que não viole separation e preferir quem for do grupo de "bons"
+          let pickIdx = pool.findIndex(p => !violatesGroup(teams[chosenTeamIdx], p.name))
+          if (pickIdx === -1) pickIdx = 0
+          const [pl] = pool.splice(pickIdx, 1)
+          teams[chosenTeamIdx].push(pl)
+        }
+      }
+
+      // Redistribuir especificamente conforme solicitado:
+      // Ordem desejada: 1) Atacantes, 2) Meias, 3) Volantes, 4) Zagueiros, 5) Laterais, 6) Goleiros
+      // 1) Atacantes -> balancear exatamente (ex: 6 -> 3/3)
+      const attackers = collectAndRemove(p => getSubRole(p) === 'ata')
+      // Se existirem atacantes, distribuir de forma equilibrada entre os times
+      // (objetivo: divisão o mais igual possível, ex: 8 -> 4/4; 6 -> 3/3)
+      if (attackers.length > 0 && teams.length > 0) {
+        const base = Math.floor(attackers.length / teams.length)
+        let remainder = attackers.length % teams.length
+        let ti = 0
+        // distribuir em round-robin respeitando a capacidade de cada time
+        for (const atk of attackers) {
+          // avança até encontrar um time com espaço
+          let attempts = 0
+          while (attempts < teams.length) {
+            const targetForTeam = base + (remainder > 0 ? 1 : 0)
+            const currentAtaCount = teams[ti].filter(p => getSubRole(p) === 'ata').length
+            if (currentAtaCount < targetForTeam && teams[ti].length < teamSlots) break
+            ti = (ti + 1) % teams.length
+            attempts++
+          }
+          teams[ti].push(atk)
+          const assignedAta = teams[ti].filter(p => getSubRole(p) === 'ata').length
+          if (assignedAta >= base + (remainder > 0 ? 1 : 0) && remainder > 0) remainder--
+          ti = (ti + 1) % teams.length
+        }
+      } else {
+        distributeEvenly(attackers)
+      }
+
+      // 2) Meias -> colocar preferencialmente no time com mais volantes
+      const meias = collectAndRemove(p => getSubRole(p) === 'meio')
+      distributeEvenly(meias, (team) => team.filter(x => getSubRole(x) === 'vol').length)
+
+      // 3) Volantes -> balancear (ex: 5 -> 3/2)
+      const volantes = collectAndRemove(p => getSubRole(p) === 'vol')
+      // se houver volantes especiais na lista, distribui-los primeiro de forma equilibrada
+      const specialVolanteNames = ['cassio', 'jp', 'felipe augusto', 'andre mm']
+      const specials: Player[] = []
+      const othersVols: Player[] = []
+      for (const v of volantes) {
+        if (specialVolanteNames.includes(stripGloveEmoji(v.name).toLowerCase())) specials.push(v)
+        else othersVols.push(v)
+      }
+
+      if (specials.length > 0 && teams.length > 0) {
+        // distribuir especiais em round-robin para equilibrar (ignora violatesGroup aqui)
+        let ti = 0
+        const maxPer = Math.ceil(specials.length / teams.length)
+        const counts = Array.from({ length: teams.length }, () => 0)
+        for (const sp of specials) {
+          // encontrar próximo time com menos que maxPer (circular)
+          let attempts = 0
+          while (attempts < teams.length) {
+            if (counts[ti] < maxPer && teams[ti].length < teamSlots) break
+            ti = (ti + 1) % teams.length
+            attempts++
+          }
+          teams[ti].push(sp)
+          counts[ti]++
+          ti = (ti + 1) % teams.length
+        }
+      }
+
+      // distribuir os demais volantes normalmente
+      if (othersVols.length > 0) distributeEvenly(othersVols)
+
+      // 4) Zagueiros
+      const zags = collectAndRemove(p => getSubRole(p) === 'zag')
+      distributeEvenly(zags)
+
+      // 5) Laterais
+      const lats = collectAndRemove(p => getSubRole(p) === 'lat')
+      distributeEvenly(lats)
+
+      // 6) Goleiros
+      const gols = collectAndRemove(p => getSubRole(p) === 'gol')
+      distributeEvenly(gols)
+
+      // Reordenar jogadores dentro de cada time para visualização: gol, zag, lat, vol, meio, ata
+      const orderKey = (p: Player) => {
+        const sr = getSubRole(p)
+        if (sr === 'gol') return 0
+        if (sr === 'zag') return 1
+        if (sr === 'lat') return 2
+        if (sr === 'vol') return 3
+        if (sr === 'meio') return 4
+        return 5
+      }
+      for (const team of teams) {
+        team.sort((a, b) => {
+          const oa = orderKey(a)
+          const ob = orderKey(b)
+          if (oa !== ob) return oa - ob
+          return a.name.localeCompare(b.name)
+        })
       }
 
       // Nomes dos times
