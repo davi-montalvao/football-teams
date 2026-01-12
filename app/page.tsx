@@ -232,10 +232,22 @@ const getPredefinedBasePosition = (displayName: string, gameType: keyof typeof g
 const initialEditedPlayers: {[key: string]: {position?: string}} = {}
 const _kore = initialPredefinedPlayers.find(p => stripGloveEmoji(p.name).toLowerCase() === 'koreia')
 if (_kore) initialEditedPlayers[_kore.id] = { position: 'Volante' }
-const _andre = initialPredefinedPlayers.find(p => stripGloveEmoji(p.name).toLowerCase() === 'andré mm')
-if (_andre) initialEditedPlayers[_andre.id] = { position: 'Volante' }
+const _andre = initialPredefinedPlayers.find(p => p.name.toLowerCase().includes('andré mm') || p.name.toLowerCase().includes('andre mm'))
+if (_andre) initialEditedPlayers[_andre.id] = { position: 'Meia' }
 const _ket = initialPredefinedPlayers.find(p => stripGloveEmoji(p.name).toLowerCase() === 'ket')
 if (_ket) initialEditedPlayers[_ket.id] = { position: 'Volante' }
+
+const _pacheco = initialPredefinedPlayers.find(p => p.name.toLowerCase().includes('pacheco'))
+if (_pacheco) initialEditedPlayers[_pacheco.id] = { position: 'Volante' }
+
+const _zoio = initialPredefinedPlayers.find(p => p.name.toLowerCase().includes('zoio'))
+if (_zoio) initialEditedPlayers[_zoio.id] = { position: 'Ata' }
+
+const _cassio = initialPredefinedPlayers.find(p => p.name.toLowerCase().includes('cassio'))
+if (_cassio) initialEditedPlayers[_cassio.id] = { position: 'Meia' }
+
+const _renato = initialPredefinedPlayers.find(p => p.name.toLowerCase().includes('renato'))
+if (_renato) initialEditedPlayers[_renato.id] = { position: 'Meia' }
 
 export default function FootballTeams() {
   const [players, setPlayers] = useState<Player[]>([])
