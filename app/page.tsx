@@ -321,6 +321,20 @@ export default function FootballTeams() {
         }
       }))
 
+      // Se houver vagas necessárias, já seleciona o jogador recém-criado
+      setSelectedPredefinedPlayers(prev => {
+        try {
+          const needed = getTotalPlayersNeeded()
+          const missing = Math.max(0, needed - (players.length + prev.length))
+          if (missing > 0) {
+            return [...prev, playerId]
+          }
+        } catch (e) {
+          // em caso de qualquer erro, não trava a UI
+        }
+        return prev
+      })
+
       setNewPlayer({ name: "", position: "" })
     }
   }
