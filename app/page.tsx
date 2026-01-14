@@ -472,6 +472,21 @@ export default function FootballTeams() {
       // Balanceamento por posição: goleiro, defesa, meio, ataque (ajustado por modalidade)
       const selected = [...pool].slice(0, totalPlayersNeeded)
 
+      // Validação: não permitir mais goleiros do que times (1 goleiro por time)
+      const goalkeeperCount = selected.filter(p => {
+        const pp = p.position.toLowerCase()
+        return pp.includes('gol') || pp.includes('goleiro')
+      }).length
+
+      if (goalkeeperCount > currentNumberOfTeams) {
+        toast({
+          title: "Muitos goleiros selecionados",
+          description: `Foram selecionados ${goalkeeperCount} goleiro${goalkeeperCount > 1 ? 's' : ''} para ${currentNumberOfTeams} time${currentNumberOfTeams > 1 ? 's' : ''}. Remova goleiros ou aumente o número de times.`,
+          variant: "destructive",
+        })
+        return
+      }
+
       const roleOf = (position: string): 'gol' | 'def' | 'meio' | 'ata' => {
         const p = position.toLowerCase()
         if (p.includes('gol')) return 'gol'
@@ -514,6 +529,17 @@ export default function FootballTeams() {
 
       // Criar arrays para todos os times
       const teams: Player[][] = Array.from({ length: currentNumberOfTeams }, () => [])
+
+      // Distribuir um goleiro por time (se existirem goleiros)
+      if (groups.gol && groups.gol.length > 0) {
+        // round-robin: atribui até 1 goleiro por time
+        let ti = 0
+        while (groups.gol.length > 0 && ti < teams.length) {
+          const gk = groups.gol.shift()!
+          teams[ti].push(gk)
+          ti++
+        }
+      }
 
       // separationGroups removido: agora qualquer jogador pode jogar com qualquer outro
       const separationGroups: string[][] = []
@@ -855,9 +881,7 @@ export default function FootballTeams() {
       const lats = collectAndRemove(p => getSubRole(p) === 'lat')
       distributeEvenly(lats)
 
-      // 6) Goleiros
-      const gols = collectAndRemove(p => getSubRole(p) === 'gol')
-      distributeEvenly(gols)
+      // 6) Goleiros - já distribuídos anteriormente (1 por time)
 
       // Reordenar jogadores dentro de cada time para visualização: gol, zag, lat, vol, meio, ata
       const orderKey = (p: Player) => {
@@ -1380,6 +1404,18 @@ export default function FootballTeams() {
         )}
 
         {/* Times Gerados */}
+        {teams.length > 0 && !isLoading && (
+          <div className="flex items-center justify-center sm:justify-end mb-2">
+            <Button
+              variant="outline"
+              onClick={() => generateTeams(players)}
+              disabled={isLoading}
+              className="text-sm"
+            >
+              Gerar novamente
+            </Button>
+          </div>
+        )}
         {teams.length > 0 && !isLoading && (
           <div ref={teamsSectionRef} className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
             {teams.map((team, index) => {
