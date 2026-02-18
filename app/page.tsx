@@ -202,7 +202,7 @@ const playerStarsMap: Record<string, number> = {
   Anisio: 1,
   Boka: 3,
   'Bruno P': 3,
-  Carlos: 3, // Valor padrão, não estava na lista
+  Carlos: 3,
   Cassio: 3,
   Clayton: 3,
   Daniel: 3,
@@ -215,7 +215,7 @@ const playerStarsMap: Record<string, number> = {
   'Fabio Sanches': 1,
   'Felipe Augusto': 4,
   Fernandinho: 3,
-  Feth: 3,
+  Feth: 4,
   Gaúcho: 2,
   Guiomar: 3,
   Jean: 1,
@@ -1390,7 +1390,7 @@ export default function FootballTeams() {
             // Verificar se já existe zagueiro com rating 1 no time
             const existingZags = team.filter(p => getSubRole(p) === 'zag');
             const hasRating1Zag = existingZags.some(p => (p.stars || 3) === 1);
-            
+
             // REGRA CRÍTICA: Se o zagueiro tem rating 1, NÃO pode ir para time que já tem rating 1
             if (defStars === 1 && hasRating1Zag) {
               continue; // Pular este time completamente
