@@ -1538,6 +1538,8 @@ export default function FootballTeams() {
       // Calcular quantos atacantes por time (idealmente 1, mas pode ser mais se houver muitos atacantes)
       const baseAtacantes = Math.floor(attackers.length / teams.length);
       let remainderAtacantes = attackers.length % teams.length;
+      // Limite máximo de atacantes por time (usado também na fase de sobras)
+      const maxAtacantesPorTime = Math.ceil(attackers.length / teams.length);
 
       for (const atk of attackers) {
         let bestTeamIdx = -1;
@@ -1703,22 +1705,66 @@ export default function FootballTeams() {
         ),
       ];
 
-      // Distribuir jogadores restantes equilibrando por estrelas e respeitando regras de separação
+      // Distribuir jogadores restantes equilibrando por estrelas, posições e regras de separação,
+      // mas garantindo que todos os jogadores selecionados sejam aproveitados.
       while (leftoverPlayers.length > 0) {
         let assigned = false;
-        for (let t = 0; t < teams.length && leftoverPlayers.length > 0; t++) {
-          if (teams[t].length < teamSlots) {
-            const teamStars = getTeamStars(teams[t]);
-            const starsDiff = targetStarsPerTeam - teamStars;
 
-            // Encontrar melhor jogador para equilibrar que não viole regras de separação
+        // Primeira passada: respeita separationGroups e limite de atacantes por time
+        for (let t = 0; t < teams.length && leftoverPlayers.length > 0; t++) {
+          if (teams[t].length >= teamSlots) continue;
+
+          const teamStars = getTeamStars(teams[t]);
+
+          // Encontrar melhor jogador para equilibrar que não viole regras de separação
+          let bestIdx = -1;
+          let bestScore = Infinity;
+
+          for (let i = 0; i < leftoverPlayers.length; i++) {
+            const player = leftoverPlayers[i];
+
+            // Verificar se não viola regras de separação
+            if (violatesGroup(teams[t], player.name)) continue;
+
+            // Evitar estourar demais o número de atacantes neste time
+            const role = getSubRole(player);
+            if (role === 'ata') {
+              const currentAtaCount = teams[t].filter(
+                p => getSubRole(p) === 'ata',
+              ).length;
+              // Não permitir mais atacantes do que o limite calculado
+              if (currentAtaCount >= maxAtacantesPorTime) continue;
+            }
+
+            const playerStars = player.stars || 3;
+            const newStarsDiff = Math.abs(
+              targetStarsPerTeam - (teamStars + playerStars),
+            );
+
+            if (newStarsDiff < bestScore) {
+              bestScore = newStarsDiff;
+              bestIdx = i;
+            }
+          }
+
+          if (bestIdx !== -1) {
+            const [player] = leftoverPlayers.splice(bestIdx, 1);
+            teams[t].push(player);
+            assigned = true;
+          }
+        }
+
+        if (!assigned && leftoverPlayers.length > 0) {
+          // Segunda passada: ainda respeita separationGroups, mas ignora limite de atacantes
+          for (let t = 0; t < teams.length && leftoverPlayers.length > 0; t++) {
+            if (teams[t].length >= teamSlots) continue;
+
+            const teamStars = getTeamStars(teams[t]);
             let bestIdx = -1;
             let bestScore = Infinity;
 
             for (let i = 0; i < leftoverPlayers.length; i++) {
               const player = leftoverPlayers[i];
-
-              // Verificar se não viola regras de separação
               if (violatesGroup(teams[t], player.name)) continue;
 
               const playerStars = player.stars || 3;
@@ -1739,7 +1785,16 @@ export default function FootballTeams() {
             }
           }
         }
-        if (!assigned) break; // Se não conseguiu atribuir nenhum, sair do loop
+
+        if (!assigned && leftoverPlayers.length > 0) {
+          // Último recurso: ignorar até separationGroups, mas garantir que ninguém fique de fora.
+          for (let t = 0; t < teams.length && leftoverPlayers.length > 0; t++) {
+            if (teams[t].length >= teamSlots) continue;
+            const [player] = leftoverPlayers.splice(0, 1);
+            teams[t].push(player);
+            assigned = true;
+          }
+        }
       }
 
       // Reordenar jogadores dentro de cada time para visualização: gol, zag, lat, vol, meio, ata
