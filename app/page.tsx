@@ -23,6 +23,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Trash2, Users, Trophy, Star, Plus, Pencil } from 'lucide-react';
 import { useIsMobile } from '@/components/ui/use-mobile';
 import { useToast } from '@/components/ui/use-toast';
+import { balanceTeams, type BalancePlayer } from '@/lib/balanceTeams';
 
 interface Player {
   id: string;
@@ -197,13 +198,13 @@ const getPredefinedBasePosition = (
 
 // Mapeamento de estrelas por jogador (não exibido na UI)
 const playerStarsMap: Record<string, number> = {
-  Alex: 4,
+  Alex: 5,
   'André MM': 5,
   Anisio: 1,
   Boka: 3,
   'Bruno P': 3,
   Carlos: 3,
-  Cassio: 3,
+  Cassio: 4,
   Clayton: 3,
   Daniel: 3,
   Davi: 2,
@@ -237,6 +238,7 @@ const playerStarsMap: Record<string, number> = {
   Lukinhas: 5,
   Lucio: 2,
   Magalhães: 3,
+  Magrelo: 3,
   Marcão: 2,
   Marcelinho: 4,
   Marcio: 3,
@@ -249,8 +251,8 @@ const playerStarsMap: Record<string, number> = {
   Ronaldinho: 4,
   Tagavas: 2,
   Vinicius: 3,
-  Wedson: 4,
-  'Zoio👀': 4,
+  Wedson: 3,
+  'Zoio👀': 3,
   Gonzales: 1,
   Igor: 4,
   Pedro: 1,
@@ -306,6 +308,7 @@ const initialPredefinedPlayers: PredefinedPlayer[] = [
   'Lucas',
   'Lukinhas',
   'Magalhães',
+  'Magrelo',
   'Marcelinho',
   'Mariano',
   'Marcio',
@@ -369,6 +372,16 @@ const _renato = initialPredefinedPlayers.find(p =>
   p.name.toLowerCase().includes('renato'),
 );
 if (_renato) initialEditedPlayers[_renato.id] = { position: 'Meia' };
+
+const _magrelo = initialPredefinedPlayers.find(
+  p => stripGloveEmoji(p.name).toLowerCase() === 'magrelo',
+);
+if (_magrelo) initialEditedPlayers[_magrelo.id] = { position: 'Lat D' };
+
+const _vinicius = initialPredefinedPlayers.find(
+  p => stripGloveEmoji(p.name).toLowerCase() === 'vinicius',
+);
+if (_vinicius) initialEditedPlayers[_vinicius.id] = { position: 'Zag' };
 
 export default function FootballTeams() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -707,393 +720,42 @@ export default function FootballTeams() {
         }, 100);
       }
 
-      Object.values(groups).forEach(arr => arr.sort(() => Math.random() - 0.5));
+      // Equilíbrio por posição e rating (algoritmo determinístico)
+      let teams: Player[][] = balanceTeams(
+        selected as BalancePlayer[],
+        currentNumberOfTeams,
+      ) as Player[][];
 
-      // Calcular total de estrelas e alvo por time para balanceamento
-      const totalStars = selected.reduce((sum, p) => sum + (p.stars || 3), 0);
-      const targetStarsPerTeam = totalStars / currentNumberOfTeams;
-
-      // Função auxiliar para calcular soma de estrelas de um time
-      const getTeamStars = (team: Player[]) =>
-        team.reduce((sum, p) => sum + (p.stars || 3), 0);
-
-      // Criar arrays para todos os times
-      const teams: Player[][] = Array.from(
-        { length: currentNumberOfTeams },
-        () => [],
-      );
-
-      // Distribuir um goleiro por time (se existirem goleiros)
-      // Ordenar goleiros por estrelas e distribuir de forma equilibrada
-      if (groups.gol && groups.gol.length > 0) {
-        groups.gol.sort((a, b) => (b.stars || 3) - (a.stars || 3)); // Ordenar por estrelas (maior primeiro)
-        // Distribuir alternando entre times para equilibrar
-        let ti = 0;
-        const teamStarsCounts = Array.from(
-          { length: currentNumberOfTeams },
-          () => 0,
-        );
-        while (groups.gol.length > 0 && ti < teams.length) {
-          // Encontrar o time com menos estrelas de goleiro
-          let minStarsIdx = 0;
-          let minStars = Infinity;
-          for (let i = 0; i < teams.length; i++) {
-            const teamGkStars = teams[i]
-              .filter(p => roleOf(p.position) === 'gol')
-              .reduce((sum, p) => sum + (p.stars || 3), 0);
-            if (teamGkStars < minStars) {
-              minStars = teamGkStars;
-              minStarsIdx = i;
-            }
-          }
-          const gk = groups.gol.shift()!;
-          teams[minStarsIdx].push(gk);
-          ti++;
-        }
-      }
-
-      // Grupos de jogadores que não podem jogar juntos
-      // Grupo 1: Lucas e Lukinhas (muito bons, não podem jogar juntos)
-      // Grupo 2: Anisio e Jean (muito ruins, não podem jogar juntos)
-      // Grupo 3: Tagavas e Ley (mais velhos, não podem jogar juntos)
+      // Corrigir grupos de separação (quem não pode jogar junto)
       const separationGroups: string[][] = [
         ['lucas', 'lukinhas'],
         ['anisio', 'jean'],
         ['tagavas', 'ley'],
       ];
-      const nameInTeam = (t: Player[], name: string) =>
-        t.some(
-          p =>
-            stripGloveEmoji(p.name).toLowerCase() ===
-            stripGloveEmoji(name).toLowerCase(),
-        );
-      const violatesGroup = (t: Player[], candidateName: string) => {
-        const candidateNameLower = stripGloveEmoji(candidateName).toLowerCase();
-        return separationGroups.some(group => {
-          const candidateInGroup = group.includes(candidateNameLower);
-          const teamHasMember = group.some(member => nameInTeam(t, member));
-          return candidateInGroup && teamHasMember;
-        });
-      };
-
-      // Ordem desejada por vaga no time (will be repeated if playersPerTeam > length)
-      const orderedSlotRoles: ('gol' | 'def' | 'meio' | 'ata')[] = [
-        'gol', // Goleiro
-        'def', // Zagueiro
-        'def', // Zagueiro
-        'def', // Lateral Direito
-        'def', // Lateral Esquerdo
-        'meio', // Volante
-        'meio', // Meia
-        'meio', // Meia
-        'ata', // Atacante
-      ];
-
-      // Função para encontrar candidato em um grupo que não viole regras
-      // Prioriza tipos conforme solicitado: ataque -> meia -> volante -> zagueiro -> laterais
-      const findCandidateIndex = (
-        group: Player[],
-        team: Player[],
-        roleKey: 'gol' | 'def' | 'meio' | 'ata',
-      ) => {
-        const candidateMatches = (p: Player, check: (p: Player) => boolean) =>
-          check(p) && !violatesGroup(team, p.name);
-
-        // helpers to detect sub-positions from position label
-        const pos = (p: Player) => p.position.toLowerCase();
-        const isAttacker = (p: Player) =>
-          pos(p).includes('ata') ||
-          pos(p).includes('piv') ||
-          pos(p).includes('centroav') ||
-          pos(p).includes('ponto');
-        const isMeia = (p: Player) =>
-          (pos(p).includes('meia') && !pos(p).includes('meia a')) ||
-          pos(p).includes('meio');
-        const isVolante = (p: Player) => pos(p).includes('volante');
-        const isZagueiro = (p: Player) =>
-          pos(p).includes('zag') ||
-          pos(p).includes('zagueiro') ||
-          pos(p).includes('fixo');
-        const isLateral = (p: Player) =>
-          pos(p).includes('lat') || pos(p).includes('ponte');
-
-        // preferências por roleKey (listas de checks em ordem)
-        let checks: Array<(p: Player) => boolean> = [];
-        if (roleKey === 'ata') {
-          // prefira atacantes que fazem parte do grupo de "bons" (primeiro separationGroups)
-          checks = [
-            p =>
-              isAttacker(p) &&
-              separationGroups[0]?.includes(stripGloveEmoji(p.name)),
-            p => isAttacker(p),
-            p => true,
-          ];
-        } else if (roleKey === 'meio') {
-          // meia antes de volante
-          checks = [
-            p => isMeia(p),
-            p => isVolante(p),
-            p => roleOf(p.position) === 'meio',
-            p => true,
-          ];
-        } else if (roleKey === 'def') {
-          // zagueiro antes de lateral
-          checks = [
-            p => isZagueiro(p),
-            p => isLateral(p),
-            p => roleOf(p.position) === 'def',
-            p => true,
-          ];
-        } else {
-          checks = [p => roleOf(p.position) === 'gol', p => true];
-        }
-
-        for (const check of checks) {
-          for (let i = 0; i < group.length; i++) {
-            const candidate = group[i];
-            if (candidateMatches(candidate, check)) return i;
-          }
-        }
-        return -1;
-      };
-
-      const teamSlots = currentPlayersPerTeam;
-
-      // helpers para detectar sub-positions
-      const posOf = (p: Player) => p.position.toLowerCase();
-      const isAttacker = (p: Player) =>
-        posOf(p).includes('ata') ||
-        posOf(p).includes('piv') ||
-        posOf(p).includes('centroav') ||
-        posOf(p).includes('ponto') ||
-        posOf(p).includes('ponta');
-      const isMeia = (p: Player) =>
-        (posOf(p).includes('meia') && !posOf(p).includes('meia a')) ||
-        posOf(p).includes('meio');
-      const isVolante = (p: Player) => posOf(p).includes('volante');
-      const isZagueiro = (p: Player) =>
-        posOf(p).includes('zag') ||
-        posOf(p).includes('zagueiro') ||
-        posOf(p).includes('fixo');
-      const isLateral = (p: Player) =>
-        posOf(p).includes('lat') ||
-        posOf(p).includes('ponte') ||
-        posOf(p).includes('lateral');
-
-      // pick index by ordered checks, considerando balanceamento de estrelas
-      const pickIndexByChecks = (
-        pool: Player[],
-        team: Player[],
-        checks: Array<(p: Player) => boolean>,
-      ) => {
-        const teamStars = getTeamStars(team);
-        const starsDiff = targetStarsPerTeam - teamStars;
-
-        // Se o time está abaixo do alvo, priorizar jogadores com mais estrelas
-        // Se está acima, priorizar jogadores com menos estrelas
-        const sortedPool = [...pool].map((p, idx) => ({ p, idx }));
-        if (starsDiff > 0) {
-          // Time precisa de mais estrelas - ordenar por estrelas decrescente
-          sortedPool.sort((a, b) => (b.p.stars || 3) - (a.p.stars || 3));
-        } else if (starsDiff < 0) {
-          // Time tem muitas estrelas - ordenar por estrelas crescente
-          sortedPool.sort((a, b) => (a.p.stars || 3) - (b.p.stars || 3));
-        }
-
-        for (const check of checks) {
-          for (const { p, idx } of sortedPool) {
-            if (check(p) && !violatesGroup(team, p.name)) return idx;
-          }
-        }
-        return -1;
-      };
-
-      // Distribuir jogadores por prioridade de posição para evitar concentração
-      const distributeRole = (roleKey: string) => {
-        let pool: Player[] = [];
-        if (roleKey === 'ata') pool = groups.ata;
-        else if (roleKey === 'gol') pool = groups.gol;
-        else if (roleKey === 'meia' || roleKey === 'volante')
-          pool = groups.meio;
-        else pool = groups.def;
-
-        if (!pool || pool.length === 0) return;
-
-        let checks: Array<(p: Player) => boolean> = [];
-        if (roleKey === 'ata') {
-          checks = [
-            p =>
-              isAttacker(p) &&
-              separationGroups[0]?.includes(stripGloveEmoji(p.name)),
-            isAttacker,
-            () => true,
-          ];
-        } else if (roleKey === 'meia') {
-          checks = [
-            isMeia,
-            isVolante,
-            p => roleOf(p.position) === 'meio',
-            () => true,
-          ];
-        } else if (roleKey === 'volante') {
-          checks = [
-            isVolante,
-            isMeia,
-            p => roleOf(p.position) === 'meio',
-            () => true,
-          ];
-        } else if (roleKey === 'zagueiro') {
-          checks = [
-            isZagueiro,
-            isLateral,
-            p => roleOf(p.position) === 'def',
-            () => true,
-          ];
-        } else if (roleKey === 'lateral') {
-          checks = [
-            isLateral,
-            isZagueiro,
-            p => roleOf(p.position) === 'def',
-            () => true,
-          ];
-        } else if (roleKey === 'gol') {
-          checks = [p => roleOf(p.position) === 'gol', () => true];
-        }
-
-        let placed = true;
-        while (placed) {
-          placed = false;
-          for (let t = 0; t < teams.length; t++) {
-            const team = teams[t];
-            if (team.length >= teamSlots) continue;
-            const idx = pickIndexByChecks(pool, team, checks);
-            if (idx !== -1) {
-              const [player] = pool.splice(idx, 1);
-              team.push(player);
-              placed = true;
-            }
-          }
-        }
-      };
-
-      // Ordem de distribuição por prioridade solicitada
-      const distributionOrder = [
-        'ata',
-        'meia',
-        'volante',
-        'zagueiro',
-        'lateral',
-        'gol',
-      ];
-      for (const roleKey of distributionOrder) distributeRole(roleKey);
-
-      // Após distribuição prioritária, preencher eventuais vagas restantes com heurística anterior
-      const remainingPlayers = [
-        ...groups.gol,
-        ...groups.def,
-        ...groups.meio,
-        ...groups.ata,
-      ];
-      groups.gol.length = 0;
-      groups.def.length = 0;
-      groups.meio.length = 0;
-      groups.ata.length = 0;
-
-      // calcular distribuição desejada a partir dos orderedSlotRoles (mesmo comportamento anterior)
-      const slots: ('gol' | 'def' | 'meio' | 'ata')[] = Array.from(
-        { length: teamSlots },
-        (_, i) => orderedSlotRoles[i % orderedSlotRoles.length],
-      );
-      const desiredCounts: Record<'gol' | 'def' | 'meio' | 'ata', number> = {
-        gol: 0,
-        def: 0,
-        meio: 0,
-        ata: 0,
-      };
-      for (let i = 0; i < teamSlots; i++) {
-        const s = slots[i % slots.length];
-        desiredCounts[s] = (desiredCounts[s] || 0) + 1;
-      }
-
-      const currentCounts = (team: Player[]) => {
-        const c: Record<'gol' | 'def' | 'meio' | 'ata', number> = {
-          gol: 0,
-          def: 0,
-          meio: 0,
-          ata: 0,
-        };
-        for (const p of team)
-          c[roleOf(p.position)] = (c[roleOf(p.position)] || 0) + 1;
-        return c;
-      };
-
-      const pickBestRemainingIndex = (team: Player[], pool: Player[]) => {
-        const teamCount = currentCounts(team);
-        const teamStars = getTeamStars(team);
-        const starsDiff = targetStarsPerTeam - teamStars;
-
-        let bestIdx = -1;
-        let bestScore = -Infinity;
-        const roleCaps: Record<'gol' | 'def' | 'meio' | 'ata', number> = {
-          gol: Math.max(1, desiredCounts.gol || 1),
-          def: (desiredCounts.def || 0) + 1,
-          meio: (desiredCounts.meio || 0) + 1,
-          ata: Math.max(1, Math.ceil(teamSlots / 4)),
-        };
-
-        for (let i = 0; i < pool.length; i++) {
-          const p = pool[i];
-          if (violatesGroup(team, p.name)) continue;
-          const r = roleOf(p.position);
-          const need = (desiredCounts[r] || 0) - (teamCount[r] || 0);
-          let score = need;
-          if ((teamCount[r] || 0) >= (roleCaps[r] || 0)) score -= 5;
-          if (r === 'ata')
-            score -=
-              Math.max(0, (teamCount.ata || 0) - Math.ceil(teamSlots / 4)) *
-              0.5;
-          if (
-            r === 'ata' &&
-            separationGroups[0]?.includes(stripGloveEmoji(p.name))
-          )
-            score += 0.3;
-
-          // Adicionar pontuação baseada em balanceamento de estrelas
-          const playerStars = p.stars || 3;
-          if (starsDiff > 0) {
-            // Time precisa de mais estrelas - bonificar jogadores com mais estrelas
-            score += playerStars * 0.3;
-          } else if (starsDiff < 0) {
-            // Time tem muitas estrelas - bonificar jogadores com menos estrelas
-            score -= playerStars * 0.3;
-          } else {
-            // Time está equilibrado - pequena bonificação para manter equilíbrio
-            score += (3 - Math.abs(playerStars - 3)) * 0.1;
-          }
-
-          if (score > bestScore) {
-            bestScore = score;
-            bestIdx = i;
-          }
-        }
-
-        if (bestIdx !== -1) return bestIdx;
-        for (let i = 0; i < pool.length; i++)
-          if (!violatesGroup(team, pool[i].name)) return i;
-        return 0;
-      };
-
+      const nameNorm = (name: string) => stripGloveEmoji(name).toLowerCase();
       for (let t = 0; t < teams.length; t++) {
         const team = teams[t];
-        while (team.length < teamSlots && remainingPlayers.length > 0) {
-          const idx = pickBestRemainingIndex(team, remainingPlayers);
-          const [player] = remainingPlayers.splice(idx, 1);
-          team.push(player);
+        for (const group of separationGroups) {
+          const inTeam = group.filter((g: string) =>
+            team.some(p => nameNorm(p.name) === g),
+          );
+          if (inTeam.length <= 1) continue;
+          const swapOut = team.find(p => nameNorm(p.name) === inTeam[0]);
+          if (!swapOut) continue;
+          for (let o = 0; o < teams.length; o++) {
+            if (o === t) continue;
+            const other = teams[o];
+            const swapIn = other.find(p => !group.includes(nameNorm(p.name)));
+            if (!swapIn) continue;
+            const iOut = team.indexOf(swapOut);
+            const iIn = other.indexOf(swapIn);
+            team[iOut] = swapIn;
+            other[iIn] = swapOut;
+            break;
+          }
         }
       }
 
-      // --- Redistribuição por posição para equilibrar números exatos por time ---
-      // Funções auxiliares para sub-roles
       const getSubRole = (p: Player) => {
         const label = p.position.toLowerCase();
         if (label.includes('gol') || label.includes('goleiro')) return 'gol';
@@ -1125,679 +787,6 @@ export default function FootballTeams() {
           return 'ata';
         return 'meio';
       };
-
-      const collectAndRemove = (predicate: (p: Player) => boolean) => {
-        const pool: Player[] = [];
-        for (const team of teams) {
-          for (let i = team.length - 1; i >= 0; i--) {
-            if (predicate(team[i])) {
-              pool.push(...team.splice(i, 1));
-            }
-          }
-        }
-        return pool;
-      };
-
-      const distributeEvenly = (
-        pool: Player[],
-        preferBy?: (team: Player[]) => number,
-      ) => {
-        const total = pool.length;
-        if (total === 0) return;
-        const base = Math.floor(total / teams.length);
-        let remainder = total % teams.length;
-
-        // targets por time
-        const targets = teams.map((_, idx) => base + (remainder > 0 ? 1 : 0));
-        if (remainder > 0) remainder--;
-
-        // se preferBy fornecido, ordena equipes por preferencia para receber +1 primeiro
-        const teamOrder = teams.map((team, idx) => ({
-          idx,
-          score: preferBy ? preferBy(team) : 0,
-        }));
-        if (preferBy) teamOrder.sort((a, b) => b.score - a.score);
-
-        // construir fila de alocação por índice de time
-        const allocationOrder: number[] = [];
-        // first allocate one to each team in round-robin respecting targets
-        for (const t of teamOrder) allocationOrder.push(t.idx);
-
-        // agora atribuir players tentando respeitar separationGroups e balancear estrelas
-        while (pool.length > 0) {
-          // encontrar time com ainda espaço (prioriza teams with less than target)
-          let chosenTeamIdx = -1;
-          for (let i = 0; i < teams.length; i++) {
-            const ti = allocationOrder[i % allocationOrder.length];
-            if (
-              teams[ti].length < teamSlots &&
-              (teams[ti].filter(p => pool.some(x => x.id === p.id)).length <
-                targets[ti] ||
-                teams[ti].length < targets[ti])
-            ) {
-              chosenTeamIdx = ti;
-              break;
-            }
-          }
-          if (chosenTeamIdx === -1) {
-            // fallback: achar qualquer time com espaço
-            chosenTeamIdx = teams.findIndex(t => t.length < teamSlots);
-            if (chosenTeamIdx === -1) chosenTeamIdx = 0;
-          }
-
-          // Selecionar jogador considerando balanceamento de estrelas
-          const teamStars = getTeamStars(teams[chosenTeamIdx]);
-          const starsDiff = targetStarsPerTeam - teamStars;
-
-          // Filtrar jogadores que não violam separationGroups
-          const validPlayers = pool
-            .map((p, idx) => ({ p, idx }))
-            .filter(({ p }) => !violatesGroup(teams[chosenTeamIdx], p.name));
-
-          let pickIdx = 0;
-          if (validPlayers.length > 0) {
-            // Ordenar por melhor balanceamento de estrelas
-            validPlayers.sort((a, b) => {
-              const aStars = a.p.stars || 3;
-              const bStars = b.p.stars || 3;
-
-              if (starsDiff > 0) {
-                // Time precisa de mais estrelas - preferir jogadores com mais estrelas
-                return bStars - aStars;
-              } else if (starsDiff < 0) {
-                // Time tem muitas estrelas - preferir jogadores com menos estrelas
-                return aStars - bStars;
-              } else {
-                // Time está equilibrado - manter equilíbrio
-                return Math.abs(aStars - 3) - Math.abs(bStars - 3);
-              }
-            });
-            pickIdx = validPlayers[0].idx;
-          } else {
-            // Se nenhum jogador válido, pegar o primeiro disponível
-            pickIdx = 0;
-          }
-
-          const [pl] = pool.splice(pickIdx, 1);
-          teams[chosenTeamIdx].push(pl);
-        }
-      };
-
-      // Formação ideal: 1 goleiro, 2 zagueiros, 2 volantes, 2 meias, 1 atacante
-      // Redistribuir seguindo essa estrutura específica, sempre equilibrando pelo rating
-
-      // Coletar todos os jogadores por posição (isso remove dos times)
-      const goalkeepers = collectAndRemove(p => getSubRole(p) === 'gol');
-      const defenders = collectAndRemove(p => getSubRole(p) === 'zag');
-      const volantes = collectAndRemove(p => getSubRole(p) === 'vol');
-      const meias = collectAndRemove(p => getSubRole(p) === 'meio');
-      const attackers = collectAndRemove(p => getSubRole(p) === 'ata');
-      const laterals = collectAndRemove(p => getSubRole(p) === 'lat');
-
-      // Combinar todos os jogadores restantes
-      const allRemainingPlayers = [
-        ...goalkeepers,
-        ...defenders,
-        ...volantes,
-        ...meias,
-        ...attackers,
-        ...laterals,
-        ...collectAndRemove(() => true), // Qualquer outro jogador restante
-      ];
-
-      // Ordenar por estrelas (decrescente) para distribuir equilibradamente
-      goalkeepers.sort((a, b) => (b.stars || 3) - (a.stars || 3));
-      defenders.sort((a, b) => (b.stars || 3) - (a.stars || 3));
-      volantes.sort((a, b) => (b.stars || 3) - (a.stars || 3));
-      meias.sort((a, b) => (b.stars || 3) - (a.stars || 3));
-      attackers.sort((a, b) => (b.stars || 3) - (a.stars || 3));
-
-      // Função auxiliar para contar laterais específicos em um time
-      const countLatD = (team: Player[]) =>
-        team.filter(p => {
-          const pos = p.position.toLowerCase();
-          return (
-            pos.includes('lat d') ||
-            pos.includes('lateral direito') ||
-            pos.includes('lat direito')
-          );
-        }).length;
-
-      const countLatE = (team: Player[]) =>
-        team.filter(p => {
-          const pos = p.position.toLowerCase();
-          return (
-            pos.includes('lat e') ||
-            pos.includes('lateral esquerdo') ||
-            pos.includes('lat esquerdo')
-          );
-        }).length;
-
-      // Função auxiliar para distribuir jogador considerando balanceamento de estrelas
-      const assignPlayerToBestTeam = (
-        player: Player,
-        requiredRole: string,
-        maxPerTeam: number,
-      ): boolean => {
-        let bestTeamIdx = -1;
-        let bestScore = Infinity;
-
-        for (let i = 0; i < teams.length; i++) {
-          const team = teams[i];
-
-          // Verificar contagem baseada no tipo de posição
-          let currentRoleCount = 0;
-          if (requiredRole === 'lat') {
-            // Para laterais, verificar se é direito ou esquerdo
-            const pos = player.position.toLowerCase();
-            if (
-              pos.includes('lat d') ||
-              pos.includes('lateral direito') ||
-              pos.includes('lat direito')
-            ) {
-              currentRoleCount = countLatD(team);
-            } else if (
-              pos.includes('lat e') ||
-              pos.includes('lateral esquerdo') ||
-              pos.includes('lat esquerdo')
-            ) {
-              currentRoleCount = countLatE(team);
-            } else {
-              currentRoleCount = team.filter(
-                p => getSubRole(p) === 'lat',
-              ).length;
-            }
-          } else {
-            currentRoleCount = team.filter(
-              p => getSubRole(p) === requiredRole,
-            ).length;
-          }
-
-          // Verificar se o time pode receber mais jogadores dessa posição
-          // E se não viola regras de separação
-          if (
-            currentRoleCount < maxPerTeam &&
-            team.length < teamSlots &&
-            !violatesGroup(team, player.name)
-          ) {
-            const teamStars = getTeamStars(team);
-            const starsDiff = Math.abs(
-              targetStarsPerTeam - (teamStars + (player.stars || 3)),
-            );
-
-            // Priorizar times que melhor equilibram as estrelas
-            if (starsDiff < bestScore) {
-              bestScore = starsDiff;
-              bestTeamIdx = i;
-            }
-          }
-        }
-
-        if (bestTeamIdx !== -1) {
-          teams[bestTeamIdx].push(player);
-          return true;
-        }
-        return false;
-      };
-
-      // 1) Goleiros - 1 por time
-      for (const gk of goalkeepers) {
-        if (
-          !teams.some(
-            t =>
-              t.filter(p => getSubRole(p) === 'gol').length < 1 &&
-              t.length < teamSlots,
-          )
-        )
-          break;
-        assignPlayerToBestTeam(gk, 'gol', 1);
-      }
-
-      // 2) Zagueiros - distribuir equilibradamente (2 por time idealmente)
-      // Ordenar zagueiros por rating (rating 1 primeiro para distribuir separadamente)
-      defenders.sort((a, b) => {
-        const aStars = a.stars || 3;
-        const bStars = b.stars || 3;
-        // Priorizar rating 1 primeiro para garantir distribuição separada
-        if (aStars === 1 && bStars !== 1) return -1;
-        if (bStars === 1 && aStars !== 1) return 1;
-        // Depois ordenar por rating decrescente
-        return bStars - aStars;
-      });
-
-      // Calcular quantos zagueiros por time
-      const baseZagueiros = Math.floor(defenders.length / teams.length);
-      let remainderZagueiros = defenders.length % teams.length;
-
-      for (const def of defenders) {
-        let bestTeamIdx = -1;
-        let bestScore = Infinity;
-        const defStars = def.stars || 3;
-
-        for (let i = 0; i < teams.length; i++) {
-          const team = teams[i];
-          const currentZagCount = team.filter(
-            p => getSubRole(p) === 'zag',
-          ).length;
-          const targetZag = baseZagueiros + (remainderZagueiros > 0 ? 1 : 0);
-
-          // Verificar se o time pode receber mais zagueiros e não viola regras
-          if (
-            currentZagCount < targetZag &&
-            team.length < teamSlots &&
-            !violatesGroup(team, def.name)
-          ) {
-            // Verificar se já existe zagueiro com rating 1 no time
-            const existingZags = team.filter(p => getSubRole(p) === 'zag');
-            const hasRating1Zag = existingZags.some(p => (p.stars || 3) === 1);
-
-            // REGRA CRÍTICA: Se o zagueiro tem rating 1, NÃO pode ir para time que já tem rating 1
-            if (defStars === 1 && hasRating1Zag) {
-              continue; // Pular este time completamente
-            }
-
-            const teamStars = getTeamStars(team);
-            const starsDiff = Math.abs(
-              targetStarsPerTeam - (teamStars + defStars),
-            );
-
-            // Penalizar times que já têm zagueiros com rating baixo (<= 2)
-            const hasLowRatedZag = existingZags.some(p => (p.stars || 3) <= 2);
-            let penalty = 0;
-
-            // Se o zagueiro tem rating baixo (<= 2) e o time já tem zagueiros com rating baixo
-            if (defStars <= 2 && hasLowRatedZag && defStars !== 1) {
-              penalty = 50; // Penalidade alta para evitar concentrar ratings baixos
-            }
-
-            // Se o zagueiro tem rating alto e o time tem zagueiros com rating baixo, bonificar
-            if (defStars >= 4 && hasLowRatedZag) {
-              penalty = -10; // Bonificação maior para equilibrar
-            }
-
-            const finalScore = starsDiff + penalty;
-
-            if (finalScore < bestScore) {
-              bestScore = finalScore;
-              bestTeamIdx = i;
-            }
-          }
-        }
-
-        if (bestTeamIdx !== -1) {
-          teams[bestTeamIdx].push(def);
-          const assignedZag = teams[bestTeamIdx].filter(
-            p => getSubRole(p) === 'zag',
-          ).length;
-          if (
-            assignedZag >= baseZagueiros + (remainderZagueiros > 0 ? 1 : 0) &&
-            remainderZagueiros > 0
-          )
-            remainderZagueiros--;
-        }
-      }
-
-      // 3) Volantes - distribuir equilibradamente (2 por time idealmente)
-      // Calcular quantos volantes por time
-      const baseVolantes = Math.floor(volantes.length / teams.length);
-      let remainderVolantes = volantes.length % teams.length;
-
-      for (const vol of volantes) {
-        let bestTeamIdx = -1;
-        let bestScore = Infinity;
-
-        for (let i = 0; i < teams.length; i++) {
-          const team = teams[i];
-          const currentVolCount = team.filter(
-            p => getSubRole(p) === 'vol',
-          ).length;
-          const targetVol = baseVolantes + (remainderVolantes > 0 ? 1 : 0);
-
-          // Verificar se o time pode receber mais volantes e não viola regras
-          if (
-            currentVolCount < targetVol &&
-            team.length < teamSlots &&
-            !violatesGroup(team, vol.name)
-          ) {
-            const teamStars = getTeamStars(team);
-            const starsDiff = Math.abs(
-              targetStarsPerTeam - (teamStars + (vol.stars || 3)),
-            );
-
-            if (starsDiff < bestScore) {
-              bestScore = starsDiff;
-              bestTeamIdx = i;
-            }
-          }
-        }
-
-        if (bestTeamIdx !== -1) {
-          teams[bestTeamIdx].push(vol);
-          const assignedVol = teams[bestTeamIdx].filter(
-            p => getSubRole(p) === 'vol',
-          ).length;
-          if (
-            assignedVol >= baseVolantes + (remainderVolantes > 0 ? 1 : 0) &&
-            remainderVolantes > 0
-          )
-            remainderVolantes--;
-        }
-      }
-
-      // 4) Meias - distribuir equilibradamente (2 por time idealmente)
-      // Calcular quantos meias por time
-      const baseMeias = Math.floor(meias.length / teams.length);
-      let remainderMeias = meias.length % teams.length;
-
-      for (const meia of meias) {
-        let bestTeamIdx = -1;
-        let bestScore = Infinity;
-
-        for (let i = 0; i < teams.length; i++) {
-          const team = teams[i];
-          const currentMeiaCount = team.filter(
-            p => getSubRole(p) === 'meio',
-          ).length;
-          const targetMeia = baseMeias + (remainderMeias > 0 ? 1 : 0);
-
-          // Verificar se o time pode receber mais meias e não viola regras
-          if (
-            currentMeiaCount < targetMeia &&
-            team.length < teamSlots &&
-            !violatesGroup(team, meia.name)
-          ) {
-            const teamStars = getTeamStars(team);
-            const starsDiff = Math.abs(
-              targetStarsPerTeam - (teamStars + (meia.stars || 3)),
-            );
-
-            if (starsDiff < bestScore) {
-              bestScore = starsDiff;
-              bestTeamIdx = i;
-            }
-          }
-        }
-
-        if (bestTeamIdx !== -1) {
-          teams[bestTeamIdx].push(meia);
-          const assignedMeia = teams[bestTeamIdx].filter(
-            p => getSubRole(p) === 'meio',
-          ).length;
-          if (
-            assignedMeia >= baseMeias + (remainderMeias > 0 ? 1 : 0) &&
-            remainderMeias > 0
-          )
-            remainderMeias--;
-        }
-      }
-
-      // 5) Atacantes - distribuir equilibradamente (idealmente 1 por time, mas pode variar)
-      // Ordenar atacantes por estrelas para distribuir equilibradamente
-      attackers.sort((a, b) => (b.stars || 3) - (a.stars || 3));
-
-      // Calcular quantos atacantes por time (idealmente 1, mas pode ser mais se houver muitos atacantes)
-      const baseAtacantes = Math.floor(attackers.length / teams.length);
-      let remainderAtacantes = attackers.length % teams.length;
-      // Limite máximo de atacantes por time (usado também na fase de sobras)
-      const maxAtacantesPorTime = Math.ceil(attackers.length / teams.length);
-
-      for (const atk of attackers) {
-        let bestTeamIdx = -1;
-        let bestScore = Infinity;
-
-        for (let i = 0; i < teams.length; i++) {
-          const team = teams[i];
-          const currentAtaCount = team.filter(
-            p => getSubRole(p) === 'ata',
-          ).length;
-          const targetAta = baseAtacantes + (remainderAtacantes > 0 ? 1 : 0);
-
-          // Verificar se o time pode receber mais atacantes e não viola regras
-          if (
-            currentAtaCount < targetAta &&
-            team.length < teamSlots &&
-            !violatesGroup(team, atk.name)
-          ) {
-            const teamStars = getTeamStars(team);
-            const starsDiff = Math.abs(
-              targetStarsPerTeam - (teamStars + (atk.stars || 3)),
-            );
-
-            if (starsDiff < bestScore) {
-              bestScore = starsDiff;
-              bestTeamIdx = i;
-            }
-          }
-        }
-
-        if (bestTeamIdx !== -1) {
-          teams[bestTeamIdx].push(atk);
-          const assignedAta = teams[bestTeamIdx].filter(
-            p => getSubRole(p) === 'ata',
-          ).length;
-          if (
-            assignedAta >= baseAtacantes + (remainderAtacantes > 0 ? 1 : 0) &&
-            remainderAtacantes > 0
-          )
-            remainderAtacantes--;
-        }
-      }
-
-      // 6) Laterais - distribuir equilibradamente entre times
-      // Separar laterais direitos e esquerdos
-      const lateralsDireito = laterals.filter(p => {
-        const pos = p.position.toLowerCase();
-        return (
-          pos.includes('lat d') ||
-          pos.includes('lateral direito') ||
-          pos.includes('lat direito')
-        );
-      });
-      const lateralsEsquerdo = laterals.filter(p => {
-        const pos = p.position.toLowerCase();
-        return (
-          pos.includes('lat e') ||
-          pos.includes('lateral esquerdo') ||
-          pos.includes('lat esquerdo')
-        );
-      });
-
-      // Ordenar por estrelas (decrescente) para distribuir equilibradamente
-      lateralsDireito.sort((a, b) => (b.stars || 3) - (a.stars || 3));
-      lateralsEsquerdo.sort((a, b) => (b.stars || 3) - (a.stars || 3));
-
-      // Distribuir laterais direitos equilibradamente (ex: 4 laterais direitos, 2 times = 2 por time)
-      const baseLatD = Math.floor(lateralsDireito.length / teams.length);
-      let remainderLatD = lateralsDireito.length % teams.length;
-      for (const latD of lateralsDireito) {
-        let bestTeamIdx = -1;
-        let bestScore = Infinity;
-
-        for (let i = 0; i < teams.length; i++) {
-          const team = teams[i];
-          const currentLatDCount = countLatD(team);
-          const targetLatD = baseLatD + (remainderLatD > 0 ? 1 : 0);
-
-          if (
-            currentLatDCount < targetLatD &&
-            team.length < teamSlots &&
-            !violatesGroup(team, latD.name)
-          ) {
-            const teamStars = getTeamStars(team);
-            const starsDiff = Math.abs(
-              targetStarsPerTeam - (teamStars + (latD.stars || 3)),
-            );
-
-            if (starsDiff < bestScore) {
-              bestScore = starsDiff;
-              bestTeamIdx = i;
-            }
-          }
-        }
-
-        if (bestTeamIdx !== -1) {
-          teams[bestTeamIdx].push(latD);
-          const assignedLatD = countLatD(teams[bestTeamIdx]);
-          if (
-            assignedLatD >= baseLatD + (remainderLatD > 0 ? 1 : 0) &&
-            remainderLatD > 0
-          )
-            remainderLatD--;
-        }
-      }
-
-      // Distribuir laterais esquerdos equilibradamente
-      const baseLatE = Math.floor(lateralsEsquerdo.length / teams.length);
-      let remainderLatE = lateralsEsquerdo.length % teams.length;
-      for (const latE of lateralsEsquerdo) {
-        let bestTeamIdx = -1;
-        let bestScore = Infinity;
-
-        for (let i = 0; i < teams.length; i++) {
-          const team = teams[i];
-          const currentLatECount = countLatE(team);
-          const targetLatE = baseLatE + (remainderLatE > 0 ? 1 : 0);
-
-          if (
-            currentLatECount < targetLatE &&
-            team.length < teamSlots &&
-            !violatesGroup(team, latE.name)
-          ) {
-            const teamStars = getTeamStars(team);
-            const starsDiff = Math.abs(
-              targetStarsPerTeam - (teamStars + (latE.stars || 3)),
-            );
-
-            if (starsDiff < bestScore) {
-              bestScore = starsDiff;
-              bestTeamIdx = i;
-            }
-          }
-        }
-
-        if (bestTeamIdx !== -1) {
-          teams[bestTeamIdx].push(latE);
-          const assignedLatE = countLatE(teams[bestTeamIdx]);
-          if (
-            assignedLatE >= baseLatE + (remainderLatE > 0 ? 1 : 0) &&
-            remainderLatE > 0
-          )
-            remainderLatE--;
-        }
-      }
-
-      // Se ainda houver jogadores restantes, distribuir equilibradamente
-      const leftoverPlayers = [
-        ...goalkeepers.filter(gk => !teams.some(t => t.includes(gk))),
-        ...defenders.filter(def => !teams.some(t => t.includes(def))),
-        ...volantes.filter(vol => !teams.some(t => t.includes(vol))),
-        ...meias.filter(meia => !teams.some(t => t.includes(meia))),
-        ...attackers.filter(atk => !teams.some(t => t.includes(atk))),
-        ...laterals.filter(lat => !teams.some(t => t.includes(lat))),
-        ...allRemainingPlayers.filter(
-          p =>
-            !goalkeepers.includes(p) &&
-            !defenders.includes(p) &&
-            !volantes.includes(p) &&
-            !meias.includes(p) &&
-            !attackers.includes(p) &&
-            !laterals.includes(p),
-        ),
-      ];
-
-      // Distribuir jogadores restantes equilibrando por estrelas, posições e regras de separação,
-      // mas garantindo que todos os jogadores selecionados sejam aproveitados.
-      while (leftoverPlayers.length > 0) {
-        let assigned = false;
-
-        // Primeira passada: respeita separationGroups e limite de atacantes por time
-        for (let t = 0; t < teams.length && leftoverPlayers.length > 0; t++) {
-          if (teams[t].length >= teamSlots) continue;
-
-          const teamStars = getTeamStars(teams[t]);
-
-          // Encontrar melhor jogador para equilibrar que não viole regras de separação
-          let bestIdx = -1;
-          let bestScore = Infinity;
-
-          for (let i = 0; i < leftoverPlayers.length; i++) {
-            const player = leftoverPlayers[i];
-
-            // Verificar se não viola regras de separação
-            if (violatesGroup(teams[t], player.name)) continue;
-
-            // Evitar estourar demais o número de atacantes neste time
-            const role = getSubRole(player);
-            if (role === 'ata') {
-              const currentAtaCount = teams[t].filter(
-                p => getSubRole(p) === 'ata',
-              ).length;
-              // Não permitir mais atacantes do que o limite calculado
-              if (currentAtaCount >= maxAtacantesPorTime) continue;
-            }
-
-            const playerStars = player.stars || 3;
-            const newStarsDiff = Math.abs(
-              targetStarsPerTeam - (teamStars + playerStars),
-            );
-
-            if (newStarsDiff < bestScore) {
-              bestScore = newStarsDiff;
-              bestIdx = i;
-            }
-          }
-
-          if (bestIdx !== -1) {
-            const [player] = leftoverPlayers.splice(bestIdx, 1);
-            teams[t].push(player);
-            assigned = true;
-          }
-        }
-
-        if (!assigned && leftoverPlayers.length > 0) {
-          // Segunda passada: ainda respeita separationGroups, mas ignora limite de atacantes
-          for (let t = 0; t < teams.length && leftoverPlayers.length > 0; t++) {
-            if (teams[t].length >= teamSlots) continue;
-
-            const teamStars = getTeamStars(teams[t]);
-            let bestIdx = -1;
-            let bestScore = Infinity;
-
-            for (let i = 0; i < leftoverPlayers.length; i++) {
-              const player = leftoverPlayers[i];
-              if (violatesGroup(teams[t], player.name)) continue;
-
-              const playerStars = player.stars || 3;
-              const newStarsDiff = Math.abs(
-                targetStarsPerTeam - (teamStars + playerStars),
-              );
-
-              if (newStarsDiff < bestScore) {
-                bestScore = newStarsDiff;
-                bestIdx = i;
-              }
-            }
-
-            if (bestIdx !== -1) {
-              const [player] = leftoverPlayers.splice(bestIdx, 1);
-              teams[t].push(player);
-              assigned = true;
-            }
-          }
-        }
-
-        if (!assigned && leftoverPlayers.length > 0) {
-          // Último recurso: ignorar até separationGroups, mas garantir que ninguém fique de fora.
-          for (let t = 0; t < teams.length && leftoverPlayers.length > 0; t++) {
-            if (teams[t].length >= teamSlots) continue;
-            const [player] = leftoverPlayers.splice(0, 1);
-            teams[t].push(player);
-            assigned = true;
-          }
-        }
-      }
-
-      // Reordenar jogadores dentro de cada time para visualização: gol, zag, lat, vol, meio, ata
       const orderKey = (p: Player) => {
         const sr = getSubRole(p);
         if (sr === 'gol') return 0;
@@ -1807,6 +796,7 @@ export default function FootballTeams() {
         if (sr === 'meio') return 4;
         return 5;
       };
+
       for (const team of teams) {
         team.sort((a, b) => {
           const oa = orderKey(a);
