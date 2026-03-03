@@ -219,6 +219,7 @@ const playerStarsMap: Record<string, number> = {
   Feth: 4,
   Gaúcho: 2,
   Guiomar: 3,
+  Gustavo: 1,
   Jean: 1,
   Jhow: 4,
   'Joaquim🧤': 5,
@@ -284,6 +285,7 @@ const initialPredefinedPlayers: PredefinedPlayer[] = [
   'Gaúcho',
   'Gonzales',
   'Guiomar',
+  'Gustavo',
   'JP',
   'Jean',
   'Igor',
@@ -382,6 +384,11 @@ const _vinicius = initialPredefinedPlayers.find(
   p => stripGloveEmoji(p.name).toLowerCase() === 'vinicius',
 );
 if (_vinicius) initialEditedPlayers[_vinicius.id] = { position: 'Zag' };
+
+const _gustavo = initialPredefinedPlayers.find(p =>
+  stripGloveEmoji(p.name).toLowerCase() === 'gustavo',
+);
+if (_gustavo) initialEditedPlayers[_gustavo.id] = { position: 'Ata' };
 
 export default function FootballTeams() {
   const [players, setPlayers] = useState<Player[]>([]);
