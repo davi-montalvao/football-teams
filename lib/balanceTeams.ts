@@ -126,6 +126,7 @@ function getTargetsPerTeam(count: number, numTeams: number): number[] {
 export function balanceTeams(
   players: BalancePlayer[],
   numTeams: number,
+  variantSeed = 0,
 ): BalancePlayer[][] {
   if (numTeams < 1) return [];
   if (players.length === 0) return Array.from({ length: numTeams }, () => []);
@@ -146,7 +147,20 @@ export function balanceTeams(
 
   // 2) Ordenar cada grupo por rating decrescente (fortes primeiro)
   for (const list of byPosition.values()) {
-    list.sort((a, b) => getRating(b) - getRating(a));
+    list.sort((a, b) => {
+      const ratingDiff = getRating(b) - getRating(a);
+      if (ratingDiff !== 0) return ratingDiff;
+      return a.name.localeCompare(b.name);
+    });
+    // Variação determinística para "Gerar novamente":
+    // rota o grupo sem usar aleatoriedade.
+    if (list.length > 1) {
+      const shift = ((variantSeed % list.length) + list.length) % list.length;
+      if (shift > 0) {
+        const rotated = list.slice(shift).concat(list.slice(0, shift));
+        list.splice(0, list.length, ...rotated);
+      }
+    }
   }
 
   // 3) Inicializar times e totais de rating por time
@@ -166,10 +180,13 @@ export function balanceTeams(
     const targets = getTargetsPerTeam(list.length, numTeams);
     const posIdx = posToIndex(pos);
 
-    for (const player of list) {
+    for (let i = 0; i < list.length; i++) {
+      const player = list[i];
       const rating = getRating(player);
       let bestTeam = 0;
       let bestScore = -Infinity;
+      let bestTieDistance = Infinity;
+      const tieStart = ((variantSeed + posIdx + i) % numTeams + numTeams) % numTeams;
 
       for (let t = 0; t < numTeams; t++) {
         // Não ultrapassar tamanho máximo por time (garante 8+8, etc.)
@@ -179,9 +196,11 @@ export function balanceTeams(
         const total = teamTotals[t];
         // Priorizar time que está abaixo do alvo desta posição; depois o de menor rating total.
         const score = underTarget ? 1e6 - total : -total;
-        if (score > bestScore) {
+        const tieDistance = (t - tieStart + numTeams) % numTeams;
+        if (score > bestScore || (score === bestScore && tieDistance < bestTieDistance)) {
           bestScore = score;
           bestTeam = t;
+          bestTieDistance = tieDistance;
         }
       }
 

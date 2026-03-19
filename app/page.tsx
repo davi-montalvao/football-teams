@@ -220,7 +220,9 @@ const playerStarsMap: Record<string, number> = {
   Gaúcho: 2,
   Guiomar: 3,
   Gustavo: 1,
+  Henrique: 5,
   Jean: 1,
+  Jhony: 5,
   Jhow: 4,
   'Joaquim🧤': 5,
   JP: 4,
@@ -286,6 +288,8 @@ const initialPredefinedPlayers: PredefinedPlayer[] = [
   'Gonzales',
   'Guiomar',
   'Gustavo',
+  'Henrique',
+  'Jhony',
   'JP',
   'Jean',
   'Igor',
@@ -402,6 +406,7 @@ export default function FootballTeams() {
     position: '',
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [regenVersion, setRegenVersion] = useState(0);
   const [selectedPredefinedPlayers, setSelectedPredefinedPlayers] = useState<
     string[]
   >([]);
@@ -636,7 +641,10 @@ export default function FootballTeams() {
     return defaultValue;
   };
 
-  const generateTeams = async (sourcePlayers?: Player[]) => {
+  const generateTeams = async (
+    sourcePlayers?: Player[],
+    variantSeed = 0,
+  ) => {
     if (!gameType) return;
 
     const currentPlayersPerTeam =
@@ -731,6 +739,7 @@ export default function FootballTeams() {
       let teams: Player[][] = balanceTeams(
         selected as BalancePlayer[],
         currentNumberOfTeams,
+        variantSeed,
       ) as Player[][];
 
       // Corrigir grupos de separação (quem não pode jogar junto)
@@ -738,8 +747,14 @@ export default function FootballTeams() {
         ['lucas', 'lukinhas'],
         ['anisio', 'jean'],
         ['tagavas', 'ley'],
+        ['henrique', 'jhony'],
+        ['gustavo', 'gaucho'],
       ];
-      const nameNorm = (name: string) => stripGloveEmoji(name).toLowerCase();
+      const nameNorm = (name: string) =>
+        stripGloveEmoji(name)
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase();
       for (let t = 0; t < teams.length; t++) {
         const team = teams[t];
         for (const group of separationGroups) {
@@ -1335,7 +1350,8 @@ export default function FootballTeams() {
                                   setPlayers(combined);
                                   setSelectedPredefinedPlayers([]);
                                 }
-                                generateTeams(combined);
+                                setRegenVersion(0);
+                                generateTeams(combined, 0);
                               }}
                               disabled={isLoading}
                               className="bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg active:from-purple-600 active:to-pink-600 transition-all duration-200 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1505,7 +1521,11 @@ export default function FootballTeams() {
               <div className="flex items-center justify-center sm:justify-end mb-2">
                 <Button
                   variant="outline"
-                  onClick={() => generateTeams(players)}
+                  onClick={() => {
+                    const next = regenVersion + 1;
+                    setRegenVersion(next);
+                    generateTeams(players, next);
+                  }}
                   disabled={isLoading}
                   className="text-sm"
                 >
