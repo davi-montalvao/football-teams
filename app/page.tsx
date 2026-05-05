@@ -394,6 +394,165 @@ const _gustavo = initialPredefinedPlayers.find(p =>
 );
 if (_gustavo) initialEditedPlayers[_gustavo.id] = { position: 'Ata' };
 
+/** Normaliza nome para regras de separação (igual ao fluxo de geração). */
+const normalizePlayerNameForRules = (name: string) =>
+  stripGloveEmoji(name)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+function getSubRoleForSwap(p: Player): string {
+  const label = p.position.toLowerCase();
+  if (label.includes('gol') || label.includes('goleiro')) return 'gol';
+  if (
+    label.includes('zag') ||
+    label.includes('zagueiro') ||
+    label.includes('fixo')
+  )
+    return 'zag';
+  if (label.includes('lat') || label.includes('ponte') || label.includes('lateral'))
+    return 'lat';
+  if (label.includes('volante')) return 'vol';
+  if (
+    (label.includes('meia') && !label.includes('meia a')) ||
+    label.includes('meio')
+  )
+    return 'meio';
+  if (
+    label.includes('piv') ||
+    label.includes('centroav') ||
+    label.includes('ata') ||
+    label.includes('ponta') ||
+    label.includes('ponto')
+  )
+    return 'ata';
+  return 'meio';
+}
+
+function getBroadRoleForSwap(p: Player): 'gol' | 'def' | 'mid' | 'fwd' {
+  const x = p.position.toLowerCase();
+  if (x.includes('gol') || x.includes('goleiro')) return 'gol';
+  if (
+    x.includes('zag') ||
+    x.includes('zagueiro') ||
+    x.includes('fixo') ||
+    x.includes('lat') ||
+    x.includes('lateral')
+  )
+    return 'def';
+  if (
+    x.includes('volante') ||
+    x.includes('meio') ||
+    (x.includes('meia') && !x.includes('meia a'))
+  )
+    return 'mid';
+  if (
+    x.includes('ata') ||
+    x.includes('piv') ||
+    x.includes('centroav') ||
+    x.includes('ponta') ||
+    x.includes('ponto')
+  )
+    return 'fwd';
+  return 'mid';
+}
+
+/**
+ * No "Gerar novamente": aplica 1 ou 2 trocas determinísticas entre times,
+ * mudando sempre pelo menos esse número de jogadores quando houver troca válida.
+ */
+function applyRegenerationSwaps(
+  teams: Player[][],
+  variantSeed: number,
+  separationGroups: string[][],
+): void {
+  if (variantSeed <= 0 || teams.length < 2) return;
+
+  const numSwaps = 1 + (variantSeed % 2);
+  let mixer = (variantSeed * 7919 + teams.length * 104729) >>> 0;
+
+  const teamViolatesSeparation = (team: Player[]) => {
+    for (const group of separationGroups) {
+      let cnt = 0;
+      for (const p of team) {
+        if (group.includes(normalizePlayerNameForRules(p.name))) {
+          cnt++;
+          if (cnt >= 2) return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  const swapAllowedRoles = (
+    a: Player,
+    b: Player,
+    strictSameSubRole: boolean,
+  ): boolean => {
+    if (strictSameSubRole)
+      return getSubRoleForSwap(a) === getSubRoleForSwap(b);
+    const ga = getSubRoleForSwap(a) === 'gol';
+    const gb = getSubRoleForSwap(b) === 'gol';
+    if (ga !== gb) return false;
+    if (ga && gb)
+      return getSubRoleForSwap(a) === getSubRoleForSwap(b);
+    return getBroadRoleForSwap(a) === getBroadRoleForSwap(b);
+  };
+
+  const trySwapPhys = (t1: number, i1: number, t2: number, i2: number) => {
+    if (t1 === t2) return false;
+    const a = teams[t1][i1];
+    const b = teams[t2][i2];
+    if (!a || !b || a.id === b.id) return false;
+    teams[t1][i1] = b;
+    teams[t2][i2] = a;
+    const bad =
+      teamViolatesSeparation(teams[t1]) ||
+      teamViolatesSeparation(teams[t2]);
+    if (bad) {
+      teams[t1][i1] = a;
+      teams[t2][i2] = b;
+      return false;
+    }
+    return true;
+  };
+
+  const collectPairs = (strictSameSubRole: boolean) => {
+    const out: Array<[number, number, number, number]> = [];
+    for (let t1 = 0; t1 < teams.length; t1++) {
+      for (let t2 = t1 + 1; t2 < teams.length; t2++) {
+        for (let i1 = 0; i1 < teams[t1].length; i1++) {
+          for (let i2 = 0; i2 < teams[t2].length; i2++) {
+            const a = teams[t1][i1];
+            const b = teams[t2][i2];
+            if (!a || !b || a.id === b.id) continue;
+            if (!swapAllowedRoles(a, b, strictSameSubRole)) continue;
+            out.push([t1, i1, t2, i2]);
+          }
+        }
+      }
+    }
+    return out;
+  };
+
+  for (let s = 0; s < numSwaps; s++) {
+    mixer = Math.imul(mixer >>> 0, 1664525) ^ (variantSeed + s + 1013904223);
+    let pairs = collectPairs(true);
+    if (pairs.length === 0) pairs = collectPairs(false);
+    if (pairs.length === 0) break;
+    const start = (mixer >>> 0) % pairs.length;
+    let ok = false;
+    for (let j = 0; j < pairs.length; j++) {
+      const [t1, i1, t2, i2] = pairs[(start + j) % pairs.length]!;
+      if (trySwapPhys(t1, i1, t2, i2)) {
+        ok = true;
+        break;
+      }
+    }
+    if (!ok) break;
+  }
+}
+
 export default function FootballTeams() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -404,6 +563,7 @@ export default function FootballTeams() {
   const [newPlayer, setNewPlayer] = useState({
     name: '',
     position: '',
+    stars: 3,
   });
   const [isLoading, setIsLoading] = useState(false);
   const [regenVersion, setRegenVersion] = useState(0);
@@ -487,7 +647,7 @@ export default function FootballTeams() {
           {
             id: playerId,
             name: finalNameWithEmoji,
-            stars: getPlayerStars(finalNameWithEmoji),
+            stars: newPlayer.stars,
             defaultPositions: {
               futsal: positionsByGameType.futsal,
               society: positionsByGameType.society,
@@ -521,7 +681,7 @@ export default function FootballTeams() {
         return prev;
       });
 
-      setNewPlayer({ name: '', position: '' });
+      setNewPlayer({ name: '', position: '', stars: 3 });
     }
   };
 
@@ -533,7 +693,7 @@ export default function FootballTeams() {
     setGameType(value);
     setPlayers([]);
     setTeams([]);
-    setNewPlayer({ name: '', position: '' });
+    setNewPlayer({ name: '', position: '', stars: 3 });
     setSelectedPredefinedPlayers([]);
 
     // Reset configurações do Society
@@ -573,7 +733,7 @@ export default function FootballTeams() {
         id: `predefined_${playerId}`,
         name: finalName,
         position: chosenPosition,
-        stars: predefinedPlayer.stars || getPlayerStars(finalName),
+        stars: predefinedPlayer.stars ?? getPlayerStars(finalName),
       };
     });
 
@@ -605,7 +765,7 @@ export default function FootballTeams() {
         id: `predefined_${playerId}`,
         name: finalName,
         position: chosenPosition,
-        stars: predefinedPlayer.stars || getPlayerStars(finalName),
+        stars: predefinedPlayer.stars ?? getPlayerStars(finalName),
       };
     });
   };
@@ -776,6 +936,10 @@ export default function FootballTeams() {
             break;
           }
         }
+      }
+
+      if (variantSeed > 0) {
+        applyRegenerationSwaps(teams, variantSeed, separationGroups);
       }
 
       const getSubRole = (p: Player) => {
@@ -1413,11 +1577,12 @@ export default function FootballTeams() {
                       : gameTypes[gameType].name}
                   </CardTitle>
                   <CardDescription className="text-gray-600 dark:text-gray-300 text-sm sm:text-base">
-                    Adicione um jogador personalizado informando nome e posição
+                    Informe nome, posição e nível (1 a 5 estrelas) para o
+                    balanceamento dos times
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
                     <div className="sm:col-span-2 lg:col-span-2">
                       <Label
                         htmlFor="name"
@@ -1460,7 +1625,41 @@ export default function FootballTeams() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="flex items-end">
+                    <div className="sm:col-span-2 lg:col-span-1">
+                      <Label
+                        htmlFor="stars"
+                        className="text-gray-700 dark:text-gray-200 text-sm sm:text-base"
+                      >
+                        Estrelas (1–5)
+                      </Label>
+                      <Select
+                        value={String(newPlayer.stars)}
+                        onValueChange={value =>
+                          setNewPlayer({
+                            ...newPlayer,
+                            stars: Math.min(
+                              5,
+                              Math.max(1, parseInt(value, 10) || 3),
+                            ),
+                          })
+                        }
+                      >
+                        <SelectTrigger
+                          id="stars"
+                          className="bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm border-gray-200/40 dark:border-gray-600/40"
+                        >
+                          <SelectValue placeholder="Estrelas" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-md">
+                          {[1, 2, 3, 4, 5].map(n => (
+                            <SelectItem key={n} value={String(n)}>
+                              {n} estrela{n === 1 ? '' : 's'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-end lg:col-span-1">
                       <Button
                         onClick={addPlayer}
                         className="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white shadow-lg active:from-emerald-600 active:to-blue-600 transition-all duration-200 text-sm sm:text-base"
