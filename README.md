@@ -26,20 +26,17 @@
 
 O **Formador de Times** é uma aplicação web moderna e intuitiva que permite aos usuários cadastrar jogadores de futebol e formar times automaticamente balanceados. Ideal para organizadores de peladas, treinadores e grupos de amigos que querem garantir partidas justas e competitivas.
 
-### 🎮 Modalidades Suportadas
+### 🎮 Modalidade
 
-- **⚽ Futsal**: 5 jogadores por time
-- **🏟️ Society**: 8 jogadores por time
-- **🌍 Campo**: 11 jogadores por time
+- **🏟️ Society**: configure número de times e jogadores por time (posições: Gol, Zag, Lat D, Lat E, Volante, Meia, Ata)
 
 ## ✨ Funcionalidades
 
 ### 🎯 **Core Features**
-- ✅ **Cadastro de Jogadores**: Nome, posição e nível de habilidade (1-10)
-- ✅ **Formação Automática**: Algoritmo inteligente para balancear times
-- ✅ **Múltiplas Modalidades**: Suporte a futsal, society e campo
-- ✅ **Posições Específicas**: Cada modalidade tem suas posições únicas
-- ✅ **Cálculo de Média**: Média de habilidade por time
+- ✅ **Cadastro de Jogadores**: Nome, posição (Society) e nível (1–5 estrelas)
+- ✅ **Formação Automática**: Distribuição dos jogadores nos times
+- ✅ **Society**: Configure times e jogadores por time
+- ✅ **Posições Society**: Gol, Zag, Lat D, Lat E, Volante, Meia, Ata
 
 ### 🎨 **UX/UI Features**
 - 🎨 **Design Moderno**: Interface limpa e intuitiva
@@ -118,30 +115,22 @@ Abra [http://localhost:3000](http://localhost:3000) no seu navegador.
 
 ## 🔧 Como Usar
 
-### **1. Escolha a Modalidade**
-- Selecione entre **Futsal**, **Society** ou **Campo**
-- Cada modalidade define o número de jogadores por time
+### **1. Configure o Society**
+- Defina **quantos times** e **quantos jogadores por time**
+- Confirme para ver a lista de jogadores disponíveis
 
 ### **2. Cadastre os Jogadores**
-- **Nome**: Nome completo do jogador
-- **Posição**: Posição específica da modalidade escolhida
-- **Habilidade**: Nível de 1 a 10 (1 = iniciante, 10 = profissional)
+- **Nome**: Nome do jogador
+- **Posição**: Posição Society
+- **Estrelas**: Nível de 1 a 5
 
 ### **3. Forme os Times**
-- Clique em **"Gerar Times"**
-- Aguarde o algoritmo calcular o melhor balanceamento
-- Visualize os times formados com médias de habilidade
+- Selecione os jogadores e clique em **"Gerar Times"**
+- Use **"Gerar novamente"** para embaralhar a distribuição
 
-### **4. Posições por Modalidade**
+### **4. Posições Society**
 
-#### ⚽ **Futsal (5 por time)**
-- Goleiro, Fixo, Ala Direito, Ala Esquerdo, Pivô
-
-#### 🏟️ **Society (7 por time)**
-- Goleiro, Zagueiro, Lateral Direito, Lateral Esquerdo, Meio-campo, Atacante
-
-#### 🌍 **Campo (11 por time)**
-- Goleiro, Zagueiro, Lateral Direito, Lateral Esquerdo, Volante, Meio-campo, Ponta Direita, Ponta Esquerda, Meia-atacante, Centroavante
+- Gol, Zag, Lat D, Lat E, Volante, Meia, Ata
 
 ## 🏗️ Estrutura do Projeto
 

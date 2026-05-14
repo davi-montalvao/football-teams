@@ -6,7 +6,7 @@ import { Toaster } from '@/components/ui/toaster'
 
 export const metadata: Metadata = {
   title: 'Formador de Times - Aplicativo para formar times de futebol',
-  description: 'Cadastre jogadores e forme times balanceados automaticamente para futsal, society e campo',
+  description: 'Cadastre jogadores e forme times automaticamente para Society',
   generator: 'Next.js',
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -23,7 +23,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Trash2, Users, Trophy, Star, Plus, Pencil } from 'lucide-react';
 import { useIsMobile } from '@/components/ui/use-mobile';
 import { useToast } from '@/components/ui/use-toast';
-import { balanceTeams, type BalancePlayer } from '@/lib/balanceTeams';
+import { splitPlayersWithHiddenYoungVeteranBalance } from '@/lib/balanceTeams';
 
 interface Player {
   id: string;
@@ -37,55 +37,57 @@ interface Team {
   players: Player[];
 }
 
+/** Posições Society (única modalidade). */
+const SOCIETY_POSITIONS = [
+  'Gol',
+  'Zag',
+  'Lat D',
+  'Lat E',
+  'Volante',
+  'Meia',
+  'Ata',
+] as const;
+
+/**
+ * Ordem na tela ao mostrar o time: goleiro, zagueiro, lateral esquerdo,
+ * lateral direito, volante, meia, atacantes.
+ */
+const LINEUP_DISPLAY_ORDER: readonly string[] = [
+  'Gol',
+  'Zag',
+  'Lat E',
+  'Lat D',
+  'Volante',
+  'Meia',
+  'Ata',
+];
+
+function lineupSortIndex(position: string): number {
+  const p = position.trim();
+  const i = LINEUP_DISPLAY_ORDER.indexOf(p);
+  return i >= 0 ? i : 1_000;
+}
+
+/** Ordena jogadores do time para exibição (posição de campo, depois nome). */
+function sortPlayersByLineup<T extends { name: string; position: string }>(
+  players: T[],
+): void {
+  players.sort((a, b) => {
+    const d = lineupSortIndex(a.position) - lineupSortIndex(b.position);
+    if (d !== 0) return d;
+    return a.name.localeCompare(b.name, 'pt-BR');
+  });
+}
+
+type SocietyPosition = (typeof SOCIETY_POSITIONS)[number];
+
 interface PredefinedPlayer {
   id: string;
   name: string;
   stars?: number;
-  defaultPositions: {
-    futsal: string[];
-    society: string[];
-    campo: string[];
-  };
+  /** Posição padrão Society (pode ser sobrescrita em `editedPlayers`). */
+  defaultPosition: SocietyPosition;
 }
-
-const positionsByGameType = {
-  futsal: ['Goleiro', 'Fixo', 'Ala D', 'Ala E', 'Pivô'],
-  society: ['Gol', 'Zag', 'Lat D', 'Lat E', 'Volante', 'Meia', 'Ata'],
-  campo: [
-    'Goleiro',
-    'Zagueiro',
-    'Lat D',
-    'Lat E',
-    'Volante',
-    'Meio',
-    'Ponte D',
-    'Ponte E',
-    'Meia A',
-    'Centroavante',
-  ],
-};
-
-const gameTypes = {
-  futsal: { name: 'Futsal', playersPerTeam: 5, fixedTeams: true },
-  society: { name: 'Society', playersPerTeam: 8, fixedTeams: false },
-  campo: { name: 'Campo', playersPerTeam: 11, fixedTeams: true },
-};
-
-const getDefaultPositionForGameType = (
-  gameType: keyof typeof gameTypes | '',
-): string => {
-  if (gameType === 'futsal') return 'Ala D';
-  if (gameType === 'society') return 'Volante';
-  if (gameType === 'campo') return 'Meio';
-  return 'Meio-campo';
-};
-
-const getGoalkeeperPositionLabel = (
-  gameType: keyof typeof gameTypes | '',
-): string => {
-  if (gameType === 'society') return 'Gol';
-  return 'Goleiro';
-};
 
 const getPositionBadgeClass = (position: string): string => {
   const pos = position.toLowerCase();
@@ -97,466 +99,94 @@ const getPositionBadgeClass = (position: string): string => {
     : `inline-flex bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50 text-purple-700 dark:text-purple-300 ${base}`;
 };
 
-// Mapeia nomes para papéis (ata, zag, le, etc.)
-const nameRoleOverrides: Record<string, 'ATA' | 'ZAG' | 'LE' | 'LD' | 'MEIO'> =
-  {
-    Boka: 'ATA',
-    'Bruno P': 'ATA',
-    Lopes: 'ZAG',
-    Guiomar: 'ZAG',
-    Jean: 'LE',
-    Davi: 'LE',
-    Denis: 'ZAG',
-    Lucas: 'ATA',
-    Lukinhas: 'ATA',
-    Wedson: 'ZAG',
-    Peter: 'ATA',
-    Jota: 'ATA',
-    Carlos: 'ZAG',
-    Eduardo: 'ATA',
-    'Fabio Sanches': 'ZAG',
-    Leopoldo: 'ZAG',
-    Ley: 'ATA',
-    Marcelinho: 'ATA',
-    Alex: 'ATA',
-    'Lucas Oliv': 'ATA',
-    Marcão: 'ATA',
-    Mariano: 'LD',
-    Michael: 'MEIO',
-    Pacheco: 'MEIO',
-    Anisio: 'ZAG',
-    Diógenes: 'ZAG',
-    Lucio: 'ZAG',
-    Emerson: 'ZAG',
-    Fernandinho: 'LE',
-    Tagavas: 'ATA',
-    Magalhães: 'LE',
-    Léo: 'ZAG',
-    Gaúcho: 'ATA',
-    'Leandro Adão': 'ZAG',
-    Clayton: 'MEIO',
-    Zoio: 'ATA',
-    'Renato R': 'MEIO',
-    Jhow: 'MEIO',
-    Feth: 'MEIO',
-    'Fabio calça': 'MEIO',
-    Gonzales: 'ZAG',
-    Igor: 'MEIO',
-    Pedro: 'ATA',
-  };
+const getPlayerStars = (_name: string): number => 3;
 
-// Converte o papel genérico para a posição por modalidade
-const mapRoleToPosition = (
-  gameType: keyof typeof gameTypes | '',
-  role: 'ATA' | 'ZAG' | 'LE' | 'LD' | 'MEIO',
-): string => {
-  if (role === 'ATA') {
-    if (gameType === 'futsal') return 'Pivô';
-    if (gameType === 'society') return 'Ata';
-    if (gameType === 'campo') return 'Centroavante';
-  }
-  if (role === 'ZAG') {
-    if (gameType === 'futsal') return 'Fixo';
-    if (gameType === 'society') return 'Zag';
-    if (gameType === 'campo') return 'Zagueiro';
-  }
-  if (role === 'LE') {
-    if (gameType === 'futsal') return 'Ala E';
-    if (gameType === 'society') return 'Lat E';
-    if (gameType === 'campo') return 'Lat E';
-  }
-  if (role === 'LD') {
-    if (gameType === 'futsal') return 'Ala D';
-    if (gameType === 'society') return 'Lat D';
-    if (gameType === 'campo') return 'Lat D';
-  }
-  if (role === 'MEIO') {
-    if (gameType === 'futsal') return 'Ala D';
-    if (gameType === 'society') return 'Meia';
-    if (gameType === 'campo') return 'Meio';
-  }
-  return getDefaultPositionForGameType(gameType);
-};
+/** Jogadores e posições Society (planilha / tela de referência). */
+const PREDEFINED_SOCIETY_SEED: { name: string; defaultPosition: SocietyPosition }[] =
+  [
+    { name: 'Alex', defaultPosition: 'Ata' },
+    { name: 'André MM', defaultPosition: 'Ata' },
+    { name: 'Anisio', defaultPosition: 'Volante' },
+    { name: 'Boka', defaultPosition: 'Ata' },
+    { name: 'Bruno P', defaultPosition: 'Meia' },
+    { name: 'Carlos', defaultPosition: 'Zag' },
+    { name: 'Cassio', defaultPosition: 'Meia' },
+    { name: 'Clayton', defaultPosition: 'Meia' },
+    { name: 'Daniel', defaultPosition: 'Zag' },
+    { name: 'Davi', defaultPosition: 'Lat E' },
+    { name: 'Denis', defaultPosition: 'Zag' },
+    { name: 'Diógenes', defaultPosition: 'Zag' },
+    { name: 'Eduardo', defaultPosition: 'Ata' },
+    { name: 'Emerson', defaultPosition: 'Zag' },
+    { name: 'Fabio calça', defaultPosition: 'Meia' },
+    { name: 'Fabio Sanches', defaultPosition: 'Zag' },
+    { name: 'Felipe Augusto', defaultPosition: 'Meia' },
+    { name: 'Fernandinho', defaultPosition: 'Lat E' },
+    { name: 'Feth', defaultPosition: 'Meia' },
+    { name: 'Gaúcho', defaultPosition: 'Ata' },
+    { name: 'Gonzales', defaultPosition: 'Zag' },
+    { name: 'Guiomar', defaultPosition: 'Zag' },
+    { name: 'Gustavo', defaultPosition: 'Ata' },
+    { name: 'Henrique', defaultPosition: 'Meia' },
+    { name: 'Igor', defaultPosition: 'Meia' },
+    { name: 'Jean', defaultPosition: 'Lat E' },
+    { name: 'Jhony', defaultPosition: 'Meia' },
+    { name: 'Jhow', defaultPosition: 'Meia' },
+    { name: 'Joaquim🧤', defaultPosition: 'Gol' },
+    { name: 'Jota', defaultPosition: 'Ata' },
+    { name: 'JP', defaultPosition: 'Meia' },
+    { name: 'Ket', defaultPosition: 'Meia' },
+    { name: 'Kleber🧤', defaultPosition: 'Gol' },
+    { name: 'Klebinho', defaultPosition: 'Volante' },
+    { name: 'Koreia', defaultPosition: 'Meia' },
+    { name: 'Leandro Adão', defaultPosition: 'Zag' },
+    { name: 'Léo', defaultPosition: 'Zag' },
+    { name: 'Leopoldo', defaultPosition: 'Zag' },
+    { name: 'Ley', defaultPosition: 'Ata' },
+    { name: 'Lopes', defaultPosition: 'Zag' },
+    { name: 'Lucas', defaultPosition: 'Ata' },
+    { name: 'Lucas Oliv', defaultPosition: 'Ata' },
+    { name: 'Lucio', defaultPosition: 'Zag' },
+    { name: 'Lukinhas', defaultPosition: 'Ata' },
+    { name: 'Magalhães', defaultPosition: 'Lat E' },
+    { name: 'Magrelo', defaultPosition: 'Lat D' },
+    { name: 'Marcão', defaultPosition: 'Ata' },
+    { name: 'Marcelinho', defaultPosition: 'Ata' },
+    { name: 'Marcio', defaultPosition: 'Volante' },
+    { name: 'Mariano', defaultPosition: 'Lat D' },
+    { name: 'Michael', defaultPosition: 'Volante' },
+    { name: 'Miquéias', defaultPosition: 'Zag' },
+    { name: 'Pacheco', defaultPosition: 'Volante' },
+    { name: 'Pedro', defaultPosition: 'Ata' },
+    { name: 'Pericles', defaultPosition: 'Ata' },
+    { name: 'Peter', defaultPosition: 'Meia' },
+    { name: 'Renatão', defaultPosition: 'Zag' },
+    { name: 'Renato📹', defaultPosition: 'Meia' },
+    { name: 'Ronaldinho', defaultPosition: 'Meia' },
+    { name: 'Tagavas', defaultPosition: 'Ata' },
+    { name: 'Vinicius', defaultPosition: 'Zag' },
+    { name: 'Wedson', defaultPosition: 'Zag' },
+    { name: 'Zoio👀', defaultPosition: 'Ata' },
+  ];
 
-const stripGloveEmoji = (name: string) =>
-  name.replace('🧤', '').replace(' 🧤', '').trim();
-
-const getPredefinedBasePosition = (
-  displayName: string,
-  gameType: keyof typeof gameTypes | '',
-): string => {
-  const nameNoEmoji = stripGloveEmoji(displayName);
-  const isGoalkeeper =
-    displayName.includes('🧤') ||
-    nameNoEmoji.toLowerCase() === 'kleber' ||
-    nameNoEmoji.toLowerCase() === 'kebler';
-  if (isGoalkeeper) return getGoalkeeperPositionLabel(gameType);
-  const role = nameRoleOverrides[nameNoEmoji];
-  if (role) return mapRoleToPosition(gameType, role);
-  return getDefaultPositionForGameType(gameType);
-};
-
-// Mapeamento de estrelas por jogador (não exibido na UI)
-const playerStarsMap: Record<string, number> = {
-  Alex: 5,
-  'André MM': 5,
-  Anisio: 1,
-  Boka: 3,
-  'Bruno P': 3,
-  Carlos: 3,
-  Cassio: 4,
-  Clayton: 3,
-  Daniel: 3,
-  Davi: 2,
-  Denis: 4,
-  Diógenes: 2,
-  Eduardo: 4,
-  Emerson: 3,
-  'Fabio calça': 4,
-  'Fabio Sanches': 1,
-  'Felipe Augusto': 4,
-  Fernandinho: 3,
-  Feth: 4,
-  Gaúcho: 2,
-  Guiomar: 3,
-  Gustavo: 1,
-  Henrique: 5,
-  Jean: 1,
-  Jhony: 5,
-  Jhow: 4,
-  'Joaquim🧤': 5,
-  JP: 4,
-  Jota: 2,
-  Ket: 3,
-  'Kleber🧤': 5,
-  Klebinho: 4,
-  Koreia: 4,
-  'Leandro Adão': 3,
-  Léo: 3,
-  Leopoldo: 3,
-  Ley: 2,
-  Lopes: 3,
-  Lucas: 5,
-  'Lucas Oliv': 4,
-  Lukinhas: 5,
-  Lucio: 2,
-  Magalhães: 3,
-  Magrelo: 3,
-  Marcão: 2,
-  Marcelinho: 4,
-  Marcio: 3,
-  Mariano: 1,
-  Michael: 3,
-  Miquéias: 4,
-  Pacheco: 3,
-  Peter: 5,
-  'Renato📹': 3,
-  Ronaldinho: 4,
-  Tagavas: 2,
-  Vinicius: 3,
-  Wedson: 3,
-  'Zoio👀': 3,
-  Gonzales: 1,
-  Igor: 4,
-  Pedro: 1,
-};
-
-const getPlayerStars = (name: string): number => {
-  const nameNoEmoji = stripGloveEmoji(name);
-  return playerStarsMap[name] || playerStarsMap[nameNoEmoji] || 3; // Padrão: 3 estrelas
-};
-
-// Lista pré-definida de jogadores (ordem alfabética)
-const initialPredefinedPlayers: PredefinedPlayer[] = [
-  'Bruno P',
-  'Boka',
-  'Carlos',
-  'Cassio',
-  'Clayton',
-  'Denis',
-  'Davi',
-  'Daniel',
-  'Anisio',
-  'André MM',
-  'Diógenes',
-  'Eduardo',
-  'Fabio Sanches',
-  'Fabio calça',
-  'Felipe Augusto',
-  'Feth',
-  'Gaúcho',
-  'Gonzales',
-  'Guiomar',
-  'Gustavo',
-  'Henrique',
-  'Jhony',
-  'JP',
-  'Jean',
-  'Igor',
-  'Jhow',
-  'Joaquim🧤',
-  'Jota',
-  'Kleber🧤',
-  'Klebinho',
-  'Koreia',
-  'Alex',
-  'Fernandinho',
-  'Lucas Oliv',
-  'Lucio',
-  'Marcão',
-  'Ket',
-  'Leandro Adão',
-  'Leopoldo',
-  'Léo',
-  'Ley',
-  'Lopes',
-  'Emerson',
-  'Lucas',
-  'Lukinhas',
-  'Magalhães',
-  'Magrelo',
-  'Marcelinho',
-  'Mariano',
-  'Marcio',
-  'Michael',
-  'Miquéias',
-  'Pacheco',
-  'Pedro',
-  'Peter',
-  'Renato📹',
-  'Ronaldinho',
-  'Tagavas',
-  'Vinicius',
-  'Wedson',
-  'Zoio👀',
-]
-  .sort((a, b) => a.localeCompare(b))
-  .map((name, index) => ({
+// Lista pré-definida (ordem alfabética por nome)
+const initialPredefinedPlayers: PredefinedPlayer[] = [...PREDEFINED_SOCIETY_SEED]
+  .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+  .map((row, index) => ({
     id: String(index + 1),
-    name,
-    stars: getPlayerStars(name),
-    defaultPositions: {
-      futsal: positionsByGameType.futsal,
-      society: positionsByGameType.society,
-      campo: positionsByGameType.campo,
-    },
+    name: row.name,
+    stars: getPlayerStars(row.name),
+    defaultPosition: row.defaultPosition,
   }));
 
-// Posições pré-definidas específicas (ex.: Koreia como Volante)
-const initialEditedPlayers: { [key: string]: { position?: string } } = {};
-const _kore = initialPredefinedPlayers.find(
-  p => stripGloveEmoji(p.name).toLowerCase() === 'koreia',
-);
-if (_kore) initialEditedPlayers[_kore.id] = { position: 'Volante' };
-const _andre = initialPredefinedPlayers.find(
-  p =>
-    p.name.toLowerCase().includes('andré mm') ||
-    p.name.toLowerCase().includes('andre mm'),
-);
-if (_andre) initialEditedPlayers[_andre.id] = { position: 'Meia' };
-const _ket = initialPredefinedPlayers.find(
-  p => stripGloveEmoji(p.name).toLowerCase() === 'ket',
-);
-if (_ket) initialEditedPlayers[_ket.id] = { position: 'Volante' };
-
-const _pacheco = initialPredefinedPlayers.find(p =>
-  p.name.toLowerCase().includes('pacheco'),
-);
-if (_pacheco) initialEditedPlayers[_pacheco.id] = { position: 'Volante' };
-
-const _zoio = initialPredefinedPlayers.find(p =>
-  p.name.toLowerCase().includes('zoio'),
-);
-if (_zoio) initialEditedPlayers[_zoio.id] = { position: 'Ata' };
-
-const _cassio = initialPredefinedPlayers.find(p =>
-  p.name.toLowerCase().includes('cassio'),
-);
-if (_cassio) initialEditedPlayers[_cassio.id] = { position: 'Meia' };
-
-const _renato = initialPredefinedPlayers.find(p =>
-  p.name.toLowerCase().includes('renato'),
-);
-if (_renato) initialEditedPlayers[_renato.id] = { position: 'Meia' };
-
-const _magrelo = initialPredefinedPlayers.find(
-  p => stripGloveEmoji(p.name).toLowerCase() === 'magrelo',
-);
-if (_magrelo) initialEditedPlayers[_magrelo.id] = { position: 'Lat D' };
-
-const _vinicius = initialPredefinedPlayers.find(
-  p => stripGloveEmoji(p.name).toLowerCase() === 'vinicius',
-);
-if (_vinicius) initialEditedPlayers[_vinicius.id] = { position: 'Zag' };
-
-const _gustavo = initialPredefinedPlayers.find(p =>
-  stripGloveEmoji(p.name).toLowerCase() === 'gustavo',
-);
-if (_gustavo) initialEditedPlayers[_gustavo.id] = { position: 'Ata' };
-
-/** Normaliza nome para regras de separação (igual ao fluxo de geração). */
-const normalizePlayerNameForRules = (name: string) =>
-  stripGloveEmoji(name)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-
-function getSubRoleForSwap(p: Player): string {
-  const label = p.position.toLowerCase();
-  if (label.includes('gol') || label.includes('goleiro')) return 'gol';
-  if (
-    label.includes('zag') ||
-    label.includes('zagueiro') ||
-    label.includes('fixo')
-  )
-    return 'zag';
-  if (label.includes('lat') || label.includes('ponte') || label.includes('lateral'))
-    return 'lat';
-  if (label.includes('volante')) return 'vol';
-  if (
-    (label.includes('meia') && !label.includes('meia a')) ||
-    label.includes('meio')
-  )
-    return 'meio';
-  if (
-    label.includes('piv') ||
-    label.includes('centroav') ||
-    label.includes('ata') ||
-    label.includes('ponta') ||
-    label.includes('ponto')
-  )
-    return 'ata';
-  return 'meio';
-}
-
-function getBroadRoleForSwap(p: Player): 'gol' | 'def' | 'mid' | 'fwd' {
-  const x = p.position.toLowerCase();
-  if (x.includes('gol') || x.includes('goleiro')) return 'gol';
-  if (
-    x.includes('zag') ||
-    x.includes('zagueiro') ||
-    x.includes('fixo') ||
-    x.includes('lat') ||
-    x.includes('lateral')
-  )
-    return 'def';
-  if (
-    x.includes('volante') ||
-    x.includes('meio') ||
-    (x.includes('meia') && !x.includes('meia a'))
-  )
-    return 'mid';
-  if (
-    x.includes('ata') ||
-    x.includes('piv') ||
-    x.includes('centroav') ||
-    x.includes('ponta') ||
-    x.includes('ponto')
-  )
-    return 'fwd';
-  return 'mid';
-}
-
-/**
- * No "Gerar novamente": aplica 1 ou 2 trocas determinísticas entre times,
- * mudando sempre pelo menos esse número de jogadores quando houver troca válida.
- */
-function applyRegenerationSwaps(
-  teams: Player[][],
-  variantSeed: number,
-  separationGroups: string[][],
-): void {
-  if (variantSeed <= 0 || teams.length < 2) return;
-
-  const numSwaps = 1 + (variantSeed % 2);
-  let mixer = (variantSeed * 7919 + teams.length * 104729) >>> 0;
-
-  const teamViolatesSeparation = (team: Player[]) => {
-    for (const group of separationGroups) {
-      let cnt = 0;
-      for (const p of team) {
-        if (group.includes(normalizePlayerNameForRules(p.name))) {
-          cnt++;
-          if (cnt >= 2) return true;
-        }
-      }
-    }
-    return false;
-  };
-
-  const swapAllowedRoles = (
-    a: Player,
-    b: Player,
-    strictSameSubRole: boolean,
-  ): boolean => {
-    if (strictSameSubRole)
-      return getSubRoleForSwap(a) === getSubRoleForSwap(b);
-    const ga = getSubRoleForSwap(a) === 'gol';
-    const gb = getSubRoleForSwap(b) === 'gol';
-    if (ga !== gb) return false;
-    if (ga && gb)
-      return getSubRoleForSwap(a) === getSubRoleForSwap(b);
-    return getBroadRoleForSwap(a) === getBroadRoleForSwap(b);
-  };
-
-  const trySwapPhys = (t1: number, i1: number, t2: number, i2: number) => {
-    if (t1 === t2) return false;
-    const a = teams[t1][i1];
-    const b = teams[t2][i2];
-    if (!a || !b || a.id === b.id) return false;
-    teams[t1][i1] = b;
-    teams[t2][i2] = a;
-    const bad =
-      teamViolatesSeparation(teams[t1]) ||
-      teamViolatesSeparation(teams[t2]);
-    if (bad) {
-      teams[t1][i1] = a;
-      teams[t2][i2] = b;
-      return false;
-    }
-    return true;
-  };
-
-  const collectPairs = (strictSameSubRole: boolean) => {
-    const out: Array<[number, number, number, number]> = [];
-    for (let t1 = 0; t1 < teams.length; t1++) {
-      for (let t2 = t1 + 1; t2 < teams.length; t2++) {
-        for (let i1 = 0; i1 < teams[t1].length; i1++) {
-          for (let i2 = 0; i2 < teams[t2].length; i2++) {
-            const a = teams[t1][i1];
-            const b = teams[t2][i2];
-            if (!a || !b || a.id === b.id) continue;
-            if (!swapAllowedRoles(a, b, strictSameSubRole)) continue;
-            out.push([t1, i1, t2, i2]);
-          }
-        }
-      }
-    }
-    return out;
-  };
-
-  for (let s = 0; s < numSwaps; s++) {
-    mixer = Math.imul(mixer >>> 0, 1664525) ^ (variantSeed + s + 1013904223);
-    let pairs = collectPairs(true);
-    if (pairs.length === 0) pairs = collectPairs(false);
-    if (pairs.length === 0) break;
-    const start = (mixer >>> 0) % pairs.length;
-    let ok = false;
-    for (let j = 0; j < pairs.length; j++) {
-      const [t1, i1, t2, i2] = pairs[(start + j) % pairs.length]!;
-      if (trySwapPhys(t1, i1, t2, i2)) {
-        ok = true;
-        break;
-      }
-    }
-    if (!ok) break;
-  }
-}
+const initialEditedPlayers: Record<
+  string,
+  { name?: string; position?: string }
+> = {};
 
 export default function FootballTeams() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
-  const [gameType, setGameType] = useState<keyof typeof gameTypes | ''>('');
   const [predefined, setPredefined] = useState<PredefinedPlayer[]>(
     initialPredefinedPlayers,
   );
@@ -566,7 +196,6 @@ export default function FootballTeams() {
     stars: 3,
   });
   const [isLoading, setIsLoading] = useState(false);
-  const [regenVersion, setRegenVersion] = useState(0);
   const [selectedPredefinedPlayers, setSelectedPredefinedPlayers] = useState<
     string[]
   >([]);
@@ -574,9 +203,9 @@ export default function FootballTeams() {
     id: string;
     field: 'name';
   } | null>(null);
-  const [editedPlayers, setEditedPlayers] = useState<{
-    [key: string]: { name?: string; position?: string };
-  }>(() => initialEditedPlayers);
+  const [editedPlayers, setEditedPlayers] = useState<
+    Record<string, { name?: string; position?: string }>
+  >(() => initialEditedPlayers);
   const [editingPredefinedPositionId, setEditingPredefinedPositionId] =
     useState<string | null>(null);
 
@@ -591,15 +220,12 @@ export default function FootballTeams() {
 
   // Função helper para calcular jogadores necessários
   const getTotalPlayersNeeded = () => {
-    if (!gameType) return 0;
-    if (gameType === 'society') {
-      return numberOfTeams * playersPerTeam;
-    }
-    return gameTypes[gameType].playersPerTeam * 2;
+    if (!societyConfigured) return 0;
+    return numberOfTeams * playersPerTeam;
   };
 
   const addPlayer = () => {
-    if (newPlayer.name && newPlayer.position && gameType) {
+    if (newPlayer.name && newPlayer.position) {
       const nameTrimmed = newPlayer.name.trim();
       const normalized = nameTrimmed
         .replace('🧤', '')
@@ -631,35 +257,19 @@ export default function FootballTeams() {
 
       // Adiciona à lista de disponíveis
       setPredefined(prev => {
-        // se a posição selecionada for goleiro, garantir emoji no nome
-        const goalieLabel = getGoalkeeperPositionLabel(gameType);
-        const finalNameWithEmoji =
-          newPlayer.position === goalieLabel ||
-          (newPlayer.position.toLowerCase &&
-            newPlayer.position.toLowerCase().includes('gol'))
-            ? nameTrimmed.includes('🧤')
-              ? nameTrimmed
-              : `${nameTrimmed} 🧤`
-            : nameTrimmed.replace(' 🧤', '').replace('🧤', '').trim();
-
         const next = [
           ...prev,
           {
             id: playerId,
-            name: finalNameWithEmoji,
+            name: nameTrimmed,
             stars: newPlayer.stars,
-            defaultPositions: {
-              futsal: positionsByGameType.futsal,
-              society: positionsByGameType.society,
-              campo: positionsByGameType.campo,
-            },
+            defaultPosition: newPlayer.position as SocietyPosition,
           },
         ];
-        // mantém em ordem alfabética
         return next.sort((a, b) => a.name.localeCompare(b.name));
       });
 
-      // Salva a posição cadastrada para que seja respeitada
+      // Salva a posição cadastrada
       setEditedPlayers(prev => ({
         ...prev,
         [playerId]: {
@@ -689,45 +299,14 @@ export default function FootballTeams() {
     setPlayers(players.filter(p => p.id !== id));
   };
 
-  const handleGameTypeChange = (value: keyof typeof gameTypes) => {
-    setGameType(value);
-    setPlayers([]);
-    setTeams([]);
-    setNewPlayer({ name: '', position: '', stars: 3 });
-    setSelectedPredefinedPlayers([]);
-
-    // Reset configurações do Society
-    if (value !== 'society') {
-      setSocietyConfigured(true);
-    } else {
-      setSocietyConfigured(false);
-      setNumberOfTeams(2);
-      setPlayersPerTeam(8);
-    }
-  };
-
   const addPredefinedPlayers = () => {
-    if (!gameType || selectedPredefinedPlayers.length === 0) return;
+    if (!societyConfigured || selectedPredefinedPlayers.length === 0) return;
 
     const newPlayers: Player[] = selectedPredefinedPlayers.map(playerId => {
       const predefinedPlayer = predefined.find(p => p.id === playerId)!;
-      const editedPos = editedPlayers[playerId]?.position;
       const finalName = editedPlayers[playerId]?.name || predefinedPlayer.name;
-      const isGoalkeeper = finalName.includes('🧤');
-      const overrideRole = nameRoleOverrides[finalName.replace(' 🧤', '')] as
-        | ('ATA' | 'ZAG' | 'LE' | 'LD' | 'MEIO')
-        | undefined;
-      const overridePos = overrideRole
-        ? mapRoleToPosition(gameType, overrideRole)
-        : undefined;
       const chosenPosition =
-        editedPos ||
-        (isGoalkeeper
-          ? getGoalkeeperPositionLabel(gameType)
-          : overridePos || getDefaultPositionForGameType(gameType));
-
-      // Usar dados editados se existirem, senão usar padrão
-      const editedData = editedPlayers[playerId] || {};
+        editedPlayers[playerId]?.position ?? predefinedPlayer.defaultPosition;
 
       return {
         id: `predefined_${playerId}`,
@@ -743,24 +322,13 @@ export default function FootballTeams() {
   };
 
   const buildPlayersFromSelection = (): Player[] => {
-    if (!gameType || selectedPredefinedPlayers.length === 0) return [];
+    if (!societyConfigured || selectedPredefinedPlayers.length === 0) return [];
     return selectedPredefinedPlayers.map(playerId => {
       const predefinedPlayer = predefined.find(p => p.id === playerId)!;
-      const editedPos = editedPlayers[playerId]?.position;
       const editedData = editedPlayers[playerId] || {};
       const finalName = editedData.name || predefinedPlayer.name;
-      const isGoalkeeper = finalName.includes('🧤');
-      const overrideRole = nameRoleOverrides[finalName.replace(' 🧤', '')] as
-        | ('ATA' | 'ZAG' | 'LE' | 'LD' | 'MEIO')
-        | undefined;
-      const overridePos = overrideRole
-        ? mapRoleToPosition(gameType, overrideRole)
-        : undefined;
       const chosenPosition =
-        editedPos ||
-        (isGoalkeeper
-          ? getGoalkeeperPositionLabel(gameType)
-          : overridePos || getDefaultPositionForGameType(gameType));
+        editedData.position ?? predefinedPlayer.defaultPosition;
       return {
         id: `predefined_${playerId}`,
         name: finalName,
@@ -803,15 +371,12 @@ export default function FootballTeams() {
 
   const generateTeams = async (
     sourcePlayers?: Player[],
-    variantSeed = 0,
+    opts?: { reshuffle?: boolean },
   ) => {
-    if (!gameType) return;
+    if (!societyConfigured) return;
 
-    const currentPlayersPerTeam =
-      gameType === 'society'
-        ? playersPerTeam
-        : gameTypes[gameType].playersPerTeam;
-    const currentNumberOfTeams = gameType === 'society' ? numberOfTeams : 2;
+    const currentPlayersPerTeam = playersPerTeam;
+    const currentNumberOfTeams = numberOfTeams;
     const totalPlayersNeeded = currentPlayersPerTeam * currentNumberOfTeams;
 
     const pool = sourcePlayers ?? players;
@@ -819,7 +384,7 @@ export default function FootballTeams() {
     if (pool.length < totalPlayersNeeded) {
       toast({
         title: 'Jogadores insuficientes',
-        description: `Você precisa de pelo menos ${totalPlayersNeeded} jogadores para ${gameTypes[gameType].name}.`,
+        description: `Você precisa de pelo menos ${totalPlayersNeeded} jogadores para Society.`,
         variant: 'destructive',
       });
       return;
@@ -828,168 +393,26 @@ export default function FootballTeams() {
     setIsLoading(true);
     toast({
       title: 'Formando Times...',
-      description: 'Estamos balanceando as posições.',
+      description: 'Distribuindo jogadores de forma equilibrada.',
     });
 
     try {
       await new Promise(resolve => setTimeout(resolve, 1500));
 
-      // Balanceamento por posição: goleiro, defesa, meio, ataque (ajustado por modalidade)
       const selected = [...pool].slice(0, totalPlayersNeeded);
 
-      // Validação: não permitir mais goleiros do que times (1 goleiro por time)
-      const goalkeeperCount = selected.filter(p => {
-        const pp = p.position.toLowerCase();
-        return pp.includes('gol') || pp.includes('goleiro');
-      }).length;
+      const shuffleSeed = opts?.reshuffle
+        ? (Date.now() ^ (performance.now() * 1_000_000 | 0)) >>> 0
+        : undefined;
 
-      if (goalkeeperCount > currentNumberOfTeams) {
-        toast({
-          title: 'Muitos goleiros selecionados',
-          description: `Foram selecionados ${goalkeeperCount} goleiro${goalkeeperCount > 1 ? 's' : ''} para ${currentNumberOfTeams} time${currentNumberOfTeams > 1 ? 's' : ''}. Remova goleiros ou aumente o número de times.`,
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      const roleOf = (position: string): 'gol' | 'def' | 'meio' | 'ata' => {
-        const p = position.toLowerCase();
-        if (p.includes('gol')) return 'gol';
-        if (p.includes('goleiro')) return 'gol';
-        if (p.includes('zag')) return 'def';
-        if (p.includes('zagueiro')) return 'def';
-        if (p.includes('lat')) return 'def';
-        if (p.includes('lateral')) return 'def';
-        if (p.includes('fixo')) return 'def';
-        if (p.includes('volante')) return 'meio';
-        if (p.includes('meio')) return 'meio';
-        if (p.includes('ala')) return 'meio';
-        if (p.includes('meia a')) return 'meio';
-        if (p.includes('ponta') || p.includes('ponte')) return 'ata';
-        if (p.includes('pivô') || p.includes('pivo')) return 'ata';
-        if (p.includes('ata')) return 'ata';
-        if (p.includes('centroav')) return 'ata';
-        return 'meio';
-      };
-
-      const groups: Record<'gol' | 'def' | 'meio' | 'ata', Player[]> = {
-        gol: [],
-        def: [],
-        meio: [],
-        ata: [],
-      };
-      selected.forEach(player => groups[roleOf(player.position)].push(player));
-
-      // Validação de goleiros - mostra aviso se poucos goleiros
-      const goalkeepersNeeded = currentNumberOfTeams;
-      const goalkeepersFound = groups.gol.length;
-
-      if (goalkeepersFound < goalkeepersNeeded) {
-        // Usar setTimeout para garantir que o toast aparece após o toast de "Formando Times..."
-        setTimeout(() => {
-          toast({
-            title: '⚠️ Aviso: Poucos goleiros',
-            description: `Encontrados ${goalkeepersFound} goleiro${goalkeepersFound !== 1 ? 's' : ''}, mas são necessários ${goalkeepersNeeded} (1 por time). Times serão gerados mesmo assim.`,
-            variant: 'default',
-          });
-        }, 100);
-      }
-
-      // Equilíbrio por posição e rating (algoritmo determinístico)
-      let teams: Player[][] = balanceTeams(
-        selected as BalancePlayer[],
+      const teams = splitPlayersWithHiddenYoungVeteranBalance(
+        selected,
         currentNumberOfTeams,
-        variantSeed,
-      ) as Player[][];
-
-      // Corrigir grupos de separação (quem não pode jogar junto)
-      const separationGroups: string[][] = [
-        ['lucas', 'lukinhas'],
-        ['anisio', 'jean'],
-        ['tagavas', 'ley'],
-        ['henrique', 'jhony'],
-        ['gustavo', 'gaucho'],
-      ];
-      const nameNorm = (name: string) =>
-        stripGloveEmoji(name)
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .toLowerCase();
-      for (let t = 0; t < teams.length; t++) {
-        const team = teams[t];
-        for (const group of separationGroups) {
-          const inTeam = group.filter((g: string) =>
-            team.some(p => nameNorm(p.name) === g),
-          );
-          if (inTeam.length <= 1) continue;
-          const swapOut = team.find(p => nameNorm(p.name) === inTeam[0]);
-          if (!swapOut) continue;
-          for (let o = 0; o < teams.length; o++) {
-            if (o === t) continue;
-            const other = teams[o];
-            const swapIn = other.find(p => !group.includes(nameNorm(p.name)));
-            if (!swapIn) continue;
-            const iOut = team.indexOf(swapOut);
-            const iIn = other.indexOf(swapIn);
-            team[iOut] = swapIn;
-            other[iIn] = swapOut;
-            break;
-          }
-        }
-      }
-
-      if (variantSeed > 0) {
-        applyRegenerationSwaps(teams, variantSeed, separationGroups);
-      }
-
-      const getSubRole = (p: Player) => {
-        const label = p.position.toLowerCase();
-        if (label.includes('gol') || label.includes('goleiro')) return 'gol';
-        if (
-          label.includes('zag') ||
-          label.includes('zagueiro') ||
-          label.includes('fixo')
-        )
-          return 'zag';
-        if (
-          label.includes('lat') ||
-          label.includes('ponte') ||
-          label.includes('lateral')
-        )
-          return 'lat';
-        if (label.includes('volante')) return 'vol';
-        if (
-          (label.includes('meia') && !label.includes('meia a')) ||
-          label.includes('meio')
-        )
-          return 'meio';
-        if (
-          label.includes('piv') ||
-          label.includes('centroav') ||
-          label.includes('ata') ||
-          label.includes('ponta') ||
-          label.includes('ponto')
-        )
-          return 'ata';
-        return 'meio';
-      };
-      const orderKey = (p: Player) => {
-        const sr = getSubRole(p);
-        if (sr === 'gol') return 0;
-        if (sr === 'zag') return 1;
-        if (sr === 'lat') return 2;
-        if (sr === 'vol') return 3;
-        if (sr === 'meio') return 4;
-        return 5;
-      };
+        shuffleSeed,
+      );
 
       for (const team of teams) {
-        team.sort((a, b) => {
-          const oa = orderKey(a);
-          const ob = orderKey(b);
-          if (oa !== ob) return oa - ob;
-          return a.name.localeCompare(b.name);
-        });
+        sortPlayersByLineup(team);
       }
 
       // Nomes dos times
@@ -1011,7 +434,9 @@ export default function FootballTeams() {
       setTeams(built);
       toast({
         title: 'Times gerados!',
-        description: 'Times balanceados por posição com sucesso.',
+        description: opts?.reshuffle
+          ? 'Nova ordem dos times.'
+          : 'Times formados.',
       });
       setTimeout(() => {
         teamsSectionRef.current?.scrollIntoView({
@@ -1036,7 +461,7 @@ export default function FootballTeams() {
                 Formador de Times
               </h1>
               <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 leading-relaxed mt-1 sm:mt-2">
-                Cadastre jogadores e forme times balanceados automaticamente
+                Cadastre jogadores e forme times automaticamente
               </p>
             </div>
           </div>
@@ -1044,47 +469,9 @@ export default function FootballTeams() {
       </header>
 
       <div className="container mx-auto px-4 py-6 sm:py-8 space-y-6 sm:space-y-8">
-        <Card className="bg-gray-50/60 dark:bg-gray-900/60 backdrop-blur-md border-gray-200/30 dark:border-gray-700/30 shadow-xl">
-          <CardHeader>
-            <CardTitle className="text-gray-800 dark:text-gray-100 text-lg sm:text-xl">
-              Escolha a Modalidade
-            </CardTitle>
-            <CardDescription className="text-gray-600 dark:text-gray-300 text-sm sm:text-base">
-              Primeiro selecione o tipo de jogo para definir as posições
-              disponíveis
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-              {Object.entries(gameTypes).map(([key, type]) => (
-                <Button
-                  key={key}
-                  variant={gameType === key ? 'default' : 'outline'}
-                  onClick={() =>
-                    handleGameTypeChange(key as keyof typeof gameTypes)
-                  }
-                  className={`h-16 sm:h-20 flex flex-col gap-1 sm:gap-2 transition-all duration-200 ${
-                    gameType === key
-                      ? 'bg-gradient-to-r from-emerald-500 to-blue-500 text-white shadow-lg'
-                      : 'bg-gray-100/70 dark:bg-gray-800/70 text-gray-700 dark:text-gray-200 active:bg-gray-200/80 dark:active:bg-gray-700/80'
-                  }`}
-                >
-                  <span className="font-semibold text-sm sm:text-base">
-                    {type.name}
-                  </span>
-                  <span className="text-xs sm:text-sm opacity-80">
-                    {type.playersPerTeam} por time
-                  </span>
-                </Button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {gameType && (
-          <>
+        <>
             {/* Configuração Society */}
-            {gameType === 'society' && !societyConfigured && (
+            {!societyConfigured && (
               <Card className="bg-gray-50/60 dark:bg-gray-900/60 backdrop-blur-md border-gray-200/30 dark:border-gray-700/30 shadow-xl">
                 <CardHeader>
                   <CardTitle className="text-gray-800 dark:text-gray-100 text-lg sm:text-xl">
@@ -1170,7 +557,7 @@ export default function FootballTeams() {
             )}
 
             {/* Jogadores Disponíveis */}
-            {(gameType !== 'society' || societyConfigured) && (
+            {societyConfigured && (
               <Card className="bg-gray-50/60 dark:bg-gray-900/60 backdrop-blur-md border-gray-200/30 dark:border-gray-700/30 shadow-xl">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-gray-800 dark:text-gray-100 text-lg sm:text-xl">
@@ -1179,7 +566,7 @@ export default function FootballTeams() {
                   </CardTitle>
                   <CardDescription className="text-gray-600 dark:text-gray-300 text-sm sm:text-base">
                     Selecione os jogadores que vão participar. Clique no nome
-                    para editar.
+                    para editar; a posição pode ser ajustada ao lado.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -1327,44 +714,17 @@ export default function FootballTeams() {
                                       }
                                     }}
                                     value={
-                                      editedPlayers[player.id]?.position ||
-                                      getPredefinedBasePosition(
-                                        getEditedValue(
-                                          player.id,
-                                          'name',
-                                          player.name,
-                                        ),
-                                        gameType,
-                                      )
+                                      editedPlayers[player.id]?.position ??
+                                      player.defaultPosition
                                     }
                                     onValueChange={value => {
-                                      setEditedPlayers(prev => {
-                                        const prevEntry = prev[player.id] || {};
-                                        const currentName =
-                                          prevEntry.name ?? player.name;
-                                        const goalieLabel =
-                                          getGoalkeeperPositionLabel(gameType);
-                                        let newName = currentName;
-                                        const hasEmoji = newName.includes('🧤');
-                                        if (value === goalieLabel) {
-                                          if (!hasEmoji)
-                                            newName = `${newName} 🧤`;
-                                        } else {
-                                          if (hasEmoji)
-                                            newName = newName
-                                              .replace(' 🧤', '')
-                                              .replace('🧤', '')
-                                              .trim();
-                                        }
-                                        return {
-                                          ...prev,
-                                          [player.id]: {
-                                            ...prev[player.id],
-                                            position: value,
-                                            name: newName,
-                                          },
-                                        };
-                                      });
+                                      setEditedPlayers(prev => ({
+                                        ...prev,
+                                        [player.id]: {
+                                          ...prev[player.id],
+                                          position: value,
+                                        },
+                                      }));
                                       setEditingPredefinedPositionId(null);
                                     }}
                                   >
@@ -1372,53 +732,30 @@ export default function FootballTeams() {
                                       <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent className="bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-md">
-                                      {positionsByGameType[gameType].map(
-                                        pos => (
+                                      {SOCIETY_POSITIONS.map(pos => (
                                           <SelectItem key={pos} value={pos}>
                                             {pos}
                                           </SelectItem>
-                                        ),
-                                      )}
+                                        ))}
                                     </SelectContent>
                                   </Select>
                                 ) : (
                                   <Badge
                                     variant="secondary"
                                     className={getPositionBadgeClass(
-                                      editedPlayers[player.id]?.position ||
-                                        getPredefinedBasePosition(
-                                          getEditedValue(
-                                            player.id,
-                                            'name',
-                                            player.name,
-                                          ),
-                                          gameType,
-                                        ),
+                                      editedPlayers[player.id]?.position ??
+                                        player.defaultPosition,
                                     )}
                                   >
                                     <span className="sm:hidden">
                                       {(
-                                        editedPlayers[player.id]?.position ||
-                                        getPredefinedBasePosition(
-                                          getEditedValue(
-                                            player.id,
-                                            'name',
-                                            player.name,
-                                          ),
-                                          gameType,
-                                        )
+                                        editedPlayers[player.id]?.position ??
+                                        player.defaultPosition
                                       ).slice(0, 3)}
                                     </span>
                                     <span className="hidden sm:inline">
-                                      {editedPlayers[player.id]?.position ||
-                                        getPredefinedBasePosition(
-                                          getEditedValue(
-                                            player.id,
-                                            'name',
-                                            player.name,
-                                          ),
-                                          gameType,
-                                        )}
+                                      {editedPlayers[player.id]?.position ??
+                                        player.defaultPosition}
                                     </span>
                                   </Badge>
                                 )}
@@ -1514,8 +851,7 @@ export default function FootballTeams() {
                                   setPlayers(combined);
                                   setSelectedPredefinedPlayers([]);
                                 }
-                                setRegenVersion(0);
-                                generateTeams(combined, 0);
+                                generateTeams(combined);
                               }}
                               disabled={isLoading}
                               className="bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg active:from-purple-600 active:to-pink-600 transition-all duration-200 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1566,19 +902,16 @@ export default function FootballTeams() {
             )}
 
             {/* Cadastrar Novo Jogador */}
-            {(gameType !== 'society' || societyConfigured) && (
+            {societyConfigured && (
               <Card className="bg-gray-50/60 dark:bg-gray-900/60 backdrop-blur-md border-gray-200/30 dark:border-gray-700/30 shadow-xl">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-gray-800 dark:text-gray-100 text-lg sm:text-xl">
                     <Plus className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-500" />
-                    Cadastrar Novo Jogador -{' '}
-                    {gameType === 'society'
-                      ? `Society (${numberOfTeams} times, ${playersPerTeam} jogadores cada)`
-                      : gameTypes[gameType].name}
+                    Cadastrar Novo Jogador - Society (
+                    {numberOfTeams} times, {playersPerTeam} jogadores cada)
                   </CardTitle>
                   <CardDescription className="text-gray-600 dark:text-gray-300 text-sm sm:text-base">
-                    Informe nome, posição e nível (1 a 5 estrelas) para o
-                    balanceamento dos times
+                    Informe nome, posição e nível (1 a 5 estrelas).
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -1617,7 +950,7 @@ export default function FootballTeams() {
                           <SelectValue placeholder="Selecione a posição" />
                         </SelectTrigger>
                         <SelectContent className="bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-md">
-                          {positionsByGameType[gameType].map(pos => (
+                          {SOCIETY_POSITIONS.map(pos => (
                             <SelectItem key={pos} value={pos}>
                               {pos}
                             </SelectItem>
@@ -1659,7 +992,7 @@ export default function FootballTeams() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="flex items-end lg:col-span-1">
+                    <div className="flex items-end sm:col-span-2 lg:col-span-1">
                       <Button
                         onClick={addPlayer}
                         className="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white shadow-lg active:from-emerald-600 active:to-blue-600 transition-all duration-200 text-sm sm:text-base"
@@ -1701,8 +1034,7 @@ export default function FootballTeams() {
                         Formando Times...
                       </h3>
                       <p className="text-sm text-gray-600 dark:text-gray-300">
-                        Calculando o melhor balanceamento para times
-                        equilibrados
+                        Montando a lista de times...
                       </p>
                     </div>
 
@@ -1720,11 +1052,7 @@ export default function FootballTeams() {
               <div className="flex items-center justify-center sm:justify-end mb-2">
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    const next = regenVersion + 1;
-                    setRegenVersion(next);
-                    generateTeams(players, next);
-                  }}
+                  onClick={() => generateTeams(players, { reshuffle: true })}
                   disabled={isLoading}
                   className="text-sm"
                 >
@@ -1790,11 +1118,8 @@ export default function FootballTeams() {
                               className={`${colors.badge} inline-block w-3 h-3 rounded-full ring-2 ${colors.ring}`}
                             ></span>
                             {team.name}
-                            <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">
-                              {team.players.length}/
-                              {gameType === 'society'
-                                ? playersPerTeam
-                                : gameTypes[gameType].playersPerTeam}
+                            <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                              {team.players.length}/{playersPerTeam}
                             </span>
                           </span>
                         </CardTitle>
@@ -1846,8 +1171,7 @@ export default function FootballTeams() {
                 })}
               </div>
             )}
-          </>
-        )}
+        </>
       </div>
     </div>
   );
