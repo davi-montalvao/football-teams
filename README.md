@@ -33,7 +33,7 @@ O **Formador de Times** é uma aplicação web moderna e intuitiva que permite a
 ## ✨ Funcionalidades
 
 ### 🎯 **Core Features**
-- ✅ **Cadastro de Jogadores**: Nome, posição (Society) e nível (1–5 estrelas)
+- ✅ **Cadastro de Jogadores**: Nome, geração (Veterano/Jovem) e posição (Society)
 - ✅ **Formação Automática**: Distribuição dos jogadores nos times
 - ✅ **Society**: Configure times e jogadores por time
 - ✅ **Posições Society**: Gol, Zag, Lat D, Lat E, Volante, Meia, Ata
@@ -121,8 +121,8 @@ Abra [http://localhost:3000](http://localhost:3000) no seu navegador.
 
 ### **2. Cadastre os Jogadores**
 - **Nome**: Nome do jogador
+- **Geração**: Veterano ou Jovem (usada na montagem dos times)
 - **Posição**: Posição Society
-- **Estrelas**: Nível de 1 a 5
 
 ### **3. Forme os Times**
 - Selecione os jogadores e clique em **"Gerar Times"**
